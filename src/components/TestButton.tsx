@@ -1,13 +1,18 @@
 import { ReactNode } from 'react';
 
 interface TestButtonProps {
-  status: 'untested' | 'testing' | 'repairing' | 'success' | 'failed';
+  status: 'untested' | 'testing' | 'repairing' | 'success' | 'failed' | 'hidden';
   children: ReactNode;
   onClick?: () => void;
   isDark: boolean;
 }
 
 export function TestButton({ status = 'untested', children, onClick, isDark }: TestButtonProps) {
+  // 如果状态为隐藏，直接返回 null 不渲染任何内容
+  if (status === 'hidden') {
+    return null;
+  }
+
   // 获取基础背景和文本颜色
   const getBaseClasses = () => {
     const base = 'w-32 px-6 py-2 rounded-md transition-all duration-300 relative ';

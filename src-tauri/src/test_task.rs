@@ -7,6 +7,33 @@ pub fn spawn_test_task(app_handle: AppHandle) {
         println!("测试任务线程已启动");
         
         let mut status_toggle = false;
+
+        // 延迟2秒后推送初始测试数据，确保前端已经准备好
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        println!("推送初始测试数据...");
+        
+        // 推送测试数据
+        if let Err(e) = app_handle.emit("machine-code-update", "1") {
+            eprintln!("测试任务推送机器编码失败: {}", e);
+        }
+        if let Err(e) = app_handle.emit("server-status-update", "online") {
+            eprintln!("测试任务推送服务器状态失败: {}", e);
+        }
+        if let Err(e) = app_handle.emit("upload-count-update", 23) {
+            eprintln!("测试任务推送上传数量失败: {}", e);
+        }
+        if let Err(e) = app_handle.emit("current-device-update", "Desk-A") {
+            eprintln!("测试任务推送当前设备失败: {}", e);
+        }
+        if let Err(e) = app_handle.emit("serial-number-update", "Neal0015B") {
+            eprintln!("测试任务推送序列号失败: {}", e);
+        }
+        if let Err(e) = app_handle.emit("target-ip-update", "192.168.1.50") {
+            eprintln!("测试任务推送目标IP失败: {}", e);
+        }
+        
+        println!("初始测试数据推送完成");
         
         loop {
             // 切换服务器状态

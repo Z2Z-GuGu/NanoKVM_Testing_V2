@@ -109,24 +109,6 @@ pub fn run() {
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
-            
-            // 延迟2秒后推送初始测试数据，确保前端已经准备好
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(2));
-                
-                println!("推送初始测试数据...");
-                
-                // 推送测试数据
-                let _ = handle.emit("machine-code-update", "DEV-TEST-001");
-                let _ = handle.emit("server-status-update", "online");
-                let _ = handle.emit("upload-count-update", 15);
-                let _ = handle.emit("current-device-update", "Test-Hardware");
-                let _ = handle.emit("serial-number-update", "TEST123456");
-                let _ = handle.emit("target-ip-update", "192.168.1.50");
-                
-                println!("初始测试数据推送完成");
-            });
-            
             // 启动测试任务线程 - 定期切换服务器状态
             test_task::spawn_test_task(app.handle().clone());
             
