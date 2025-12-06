@@ -64,7 +64,7 @@ export function Sidebar({
       </div>
 
       <div>
-        <div className={`${isDark ? 'bg-neutral-700' : 'bg-neutral-400/60'} rounded-lg px-4 py-3 space-y-2 mb-8`}>
+        <div className={`${isDark ? 'bg-neutral-700' : 'bg-neutral-400/60'} rounded-lg px-4 py-3 space-y-2 mb-8 mt-8`}>
           <div className="flex items-center justify-between">
             <span className={isDark ? 'text-neutral-300' : 'text-neutral-900'}>服务器状态：</span>
             <div className="flex items-center gap-2">
