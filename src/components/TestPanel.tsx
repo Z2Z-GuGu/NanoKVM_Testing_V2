@@ -1,21 +1,115 @@
 import { TestButton } from './TestButton';
+import { useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { TestButtonStatus, TestButtonId } from '../services/backendService';
 
 interface TestPanelProps {
   isDark: boolean;
 }
 
+// 测试按钮状态管理
+interface TestButtonStates {
+  wait_connection: TestButtonStatus;
+  wait_boot: TestButtonStatus;
+  get_ip: TestButtonStatus;
+  detect_hardware: TestButtonStatus;
+  download_test: TestButtonStatus;
+  uboot: TestButtonStatus;
+  kernel: TestButtonStatus;
+  app_install: TestButtonStatus;
+  hdmi_wait_connection: TestButtonStatus;
+  hdmi_loop_test: TestButtonStatus;
+  hdmi_capture_test: TestButtonStatus;
+  hdmi_write_edid_1: TestButtonStatus;
+  hdmi_write_edid_2: TestButtonStatus;
+  hdmi_version: TestButtonStatus;
+  usb_wait_connection: TestButtonStatus;
+  eth_wait_connection: TestButtonStatus;
+  eth_upload_test: TestButtonStatus;
+  eth_download_test: TestButtonStatus;
+  wifi_wait_connection: TestButtonStatus;
+  wifi_upload_test: TestButtonStatus;
+  wifi_download_test: TestButtonStatus;
+  screen: TestButtonStatus;
+  touch: TestButtonStatus;
+  knob: TestButtonStatus;
+  atx: TestButtonStatus;
+  io: TestButtonStatus;
+  tf_card: TestButtonStatus;
+  auto_start: TestButtonStatus;
+}
+
 export function TestPanel({ isDark }: TestPanelProps) {
+  // 初始化所有按钮状态为未测试
+  const [buttonStates, setButtonStates] = useState<TestButtonStates>({
+    wait_connection: 'untested',
+    wait_boot: 'untested',
+    get_ip: 'untested',
+    detect_hardware: 'untested',
+    download_test: 'untested',
+    uboot: 'untested',
+    kernel: 'untested',
+    app_install: 'untested',
+    hdmi_wait_connection: 'untested',
+    hdmi_loop_test: 'untested',
+    hdmi_capture_test: 'untested',
+    hdmi_write_edid_1: 'untested',
+    hdmi_write_edid_2: 'untested',
+    hdmi_version: 'untested',
+    usb_wait_connection: 'untested',
+    eth_wait_connection: 'untested',
+    eth_upload_test: 'untested',
+    eth_download_test: 'untested',
+    wifi_wait_connection: 'untested',
+    wifi_upload_test: 'untested',
+    wifi_download_test: 'untested',
+    screen: 'untested',
+    touch: 'untested',
+    knob: 'untested',
+    atx: 'untested',
+    io: 'untested',
+    tf_card: 'untested',
+    auto_start: 'untested',
+  });
+
+  // 监听测试按钮状态更新事件
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    
+    const setupListener = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        unlisten = await listen('test-button-status-update', (event) => {
+          const { buttonId, status } = event.payload as { buttonId: TestButtonId; status: TestButtonStatus };
+          setButtonStates(prev => ({
+            ...prev,
+            [buttonId]: status
+          }));
+        });
+      } catch (error) {
+        console.error('监听测试按钮状态更新失败:', error);
+      }
+    };
+
+    setupListener();
+
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, []);
   return (
     <main className="flex-1 p-8 overflow-auto">
       {/* 初始化 */}
       <section className="mb-8">
         <h2 className={`mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`} style={{ fontSize: '24px', fontWeight: 'bold' }}>初始化</h2>
         <div className="flex flex-wrap gap-3">
-          <TestButton status="untested" isDark={isDark}>等待连接</TestButton>
-          <TestButton status="testing" isDark={isDark}>等待开机</TestButton>
-          <TestButton status="repairing" isDark={isDark}>获取IP</TestButton>
-          <TestButton status="success" isDark={isDark}>检测硬件</TestButton>
-          <TestButton status="failed" isDark={isDark}>下载产测</TestButton>
+          <TestButton status={buttonStates.wait_connection} isDark={isDark}>等待连接</TestButton>
+          <TestButton status={buttonStates.wait_boot} isDark={isDark}>等待开机</TestButton>
+          <TestButton status={buttonStates.get_ip} isDark={isDark}>获取IP</TestButton>
+          <TestButton status={buttonStates.detect_hardware} isDark={isDark}>检测硬件</TestButton>
+          <TestButton status={buttonStates.download_test} isDark={isDark}>下载产测</TestButton>
         </div>
       </section>
 
@@ -30,9 +124,9 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>系统更新</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>uboot</TestButton>
-          <TestButton status="untested" isDark={isDark}>kernel</TestButton>
-          <TestButton status="untested" isDark={isDark}>APP安装</TestButton>
+          <TestButton status={buttonStates.uboot} isDark={isDark}>uboot</TestButton>
+          <TestButton status={buttonStates.kernel} isDark={isDark}>kernel</TestButton>
+          <TestButton status={buttonStates.app_install} isDark={isDark}>APP安装</TestButton>
         </div>
 
         {/* HDMI接口 */}
@@ -40,12 +134,12 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>HDMI接口</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>等待连接</TestButton>
-          <TestButton status="untested" isDark={isDark}>测试环出</TestButton>
-          <TestButton status="untested" isDark={isDark}>测试采集</TestButton>
-          <TestButton status="repairing" isDark={isDark}>写EDID</TestButton>
-          <TestButton status="untested" isDark={isDark}>写EDID</TestButton>
-          <TestButton status="untested" isDark={isDark}>Version</TestButton>
+          <TestButton status={buttonStates.hdmi_wait_connection} isDark={isDark}>等待连接</TestButton>
+          <TestButton status={buttonStates.hdmi_loop_test} isDark={isDark}>测试环出</TestButton>
+          <TestButton status={buttonStates.hdmi_capture_test} isDark={isDark}>测试采集</TestButton>
+          <TestButton status={buttonStates.hdmi_write_edid_1} isDark={isDark}>写EDID</TestButton>
+          <TestButton status={buttonStates.hdmi_write_edid_2} isDark={isDark}>写EDID</TestButton>
+          <TestButton status={buttonStates.hdmi_version} isDark={isDark}>Version</TestButton>
         </div>
 
         {/* USB接口 */}
@@ -53,7 +147,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>USB接口</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>等待连接</TestButton>
+          <TestButton status={buttonStates.usb_wait_connection} isDark={isDark}>等待连接</TestButton>
         </div>
 
         {/* ETH接口 */}
@@ -61,9 +155,9 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>ETH接口</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>等待连接</TestButton>
-          <TestButton status="untested" isDark={isDark}>上传测速</TestButton>
-          <TestButton status="untested" isDark={isDark}>下载测速</TestButton>
+          <TestButton status={buttonStates.eth_wait_connection} isDark={isDark}>等待连接</TestButton>
+          <TestButton status={buttonStates.eth_upload_test} isDark={isDark}>上传测速</TestButton>
+          <TestButton status={buttonStates.eth_download_test} isDark={isDark}>下载测速</TestButton>
         </div>
 
         {/* WiFi */}
@@ -71,9 +165,9 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>WiFi</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>等待连接</TestButton>
-          <TestButton status="untested" isDark={isDark}>上传测速</TestButton>
-          <TestButton status="untested" isDark={isDark}>下载测速</TestButton>
+          <TestButton status={buttonStates.wifi_wait_connection} isDark={isDark}>等待连接</TestButton>
+          <TestButton status={buttonStates.wifi_upload_test} isDark={isDark}>上传测速</TestButton>
+          <TestButton status={buttonStates.wifi_download_test} isDark={isDark}>下载测速</TestButton>
         </div>
 
         {/* 交互 */}
@@ -81,9 +175,9 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>交互</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>屏幕</TestButton>
-          <TestButton status="untested" isDark={isDark}>触摸</TestButton>
-          <TestButton status="untested" isDark={isDark}>旋钮</TestButton>
+          <TestButton status={buttonStates.screen} isDark={isDark}>屏幕</TestButton>
+          <TestButton status={buttonStates.touch} isDark={isDark}>触摸</TestButton>
+          <TestButton status={buttonStates.knob} isDark={isDark}>旋钮</TestButton>
         </div>
 
         {/* 其他 */}
@@ -91,9 +185,9 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>其他</span>
           </div>
-          <TestButton status="untested" isDark={isDark}>ATX</TestButton>
-          <TestButton status="untested" isDark={isDark}>IO</TestButton>
-          <TestButton status="untested" isDark={isDark}>TF卡</TestButton>
+          <TestButton status={buttonStates.atx} isDark={isDark}>ATX</TestButton>
+          <TestButton status={buttonStates.io} isDark={isDark}>IO</TestButton>
+          <TestButton status={buttonStates.tf_card} isDark={isDark}>TF卡</TestButton>
         </div>
       </section>
 
@@ -103,7 +197,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
       <section>
         <h2 className={`mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`} style={{ fontSize: '24px', fontWeight: 'bold' }}>应用设置</h2>
         <div className="flex gap-3">
-          <TestButton status="untested" isDark={isDark}>开机自启</TestButton>
+          <TestButton status={buttonStates.auto_start} isDark={isDark}>开机自启</TestButton>
         </div>
       </section>
     </main>

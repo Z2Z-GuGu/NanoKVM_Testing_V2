@@ -79,3 +79,34 @@ export async function setServerStatus(status: string): Promise<void> {
     throw error;
   }
 }
+
+// 测试按钮状态类型
+export type TestButtonStatus = 'untested' | 'testing' | 'repairing' | 'success' | 'failed' | 'hidden';
+
+// 测试按钮标识符类型
+export type TestButtonId = 
+  | 'wait_connection' | 'wait_boot' | 'get_ip' | 'detect_hardware' | 'download_test'
+  | 'uboot' | 'kernel' | 'app_install'
+  | 'hdmi_wait_connection' | 'hdmi_loop_test' | 'hdmi_capture_test' | 'hdmi_write_edid_1' | 'hdmi_write_edid_2' | 'hdmi_version'
+  | 'usb_wait_connection'
+  | 'eth_wait_connection' | 'eth_upload_test' | 'eth_download_test'
+  | 'wifi_wait_connection' | 'wifi_upload_test' | 'wifi_download_test'
+  | 'screen' | 'touch' | 'knob'
+  | 'atx' | 'io' | 'tf_card'
+  | 'auto_start';
+
+// 设置测试按钮状态
+export async function setTestButtonStatus(buttonId: TestButtonId, status: TestButtonStatus): Promise<void> {
+  if (isDevEnvironment) {
+    console.log(`开发环境: 设置测试按钮 ${buttonId} 状态为 ${status}`);
+    return;
+  }
+
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('set_test_button_status', { buttonId, status });
+  } catch (error) {
+    console.error(`设置测试按钮 ${buttonId} 状态失败:`, error);
+    throw error;
+  }
+}

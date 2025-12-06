@@ -33,6 +33,35 @@ pub fn spawn_test_task(app_handle: AppHandle) {
             eprintln!("测试任务推送目标IP失败: {}", e);
         }
         
+        // 测试按钮状态更新示例
+        println!("推送测试按钮状态示例...");
+        
+        // 模拟一些测试按钮状态变化
+        if let Err(e) = app_handle.emit("test-button-status-update", serde_json::json!({
+            "buttonId": "wait_connection",
+            "status": "testing"
+        })) {
+            eprintln!("测试任务推送等待连接按钮状态失败: {}", e);
+        }
+        
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        
+        if let Err(e) = app_handle.emit("test-button-status-update", serde_json::json!({
+            "buttonId": "wait_boot",
+            "status": "success"
+        })) {
+            eprintln!("测试任务推送等待启动按钮状态失败: {}", e);
+        }
+        
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        
+        if let Err(e) = app_handle.emit("test-button-status-update", serde_json::json!({
+            "buttonId": "uboot",
+            "status": "failed"
+        })) {
+            eprintln!("测试任务推送Uboot按钮状态失败: {}", e);
+        }
+        
         println!("初始测试数据推送完成");
         
         loop {
