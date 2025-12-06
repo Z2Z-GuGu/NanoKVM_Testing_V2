@@ -1,30 +1,25 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { listen } from '@tauri-apps/api/event';
 
 interface SidebarProps {
-  machineCode: string;
-  serverStatus: 'online' | 'offline';
-  uploadCount: number;
-  currentDevice: string;
-  serialNumber: string;
-  targetIP: string;
   theme: '明亮' | '暗黑';
   onThemeChange: (theme: '明亮' | '暗黑') => void;
   isDark: boolean;
 }
 
 export function Sidebar({
-  machineCode,
-  serverStatus,
-  uploadCount,
-  currentDevice,
-  serialNumber,
-  targetIP,
   theme,
   onThemeChange,
   isDark
 }: SidebarProps) {
   const [currentTime, setCurrentTime] = useState('');
+  const [machineCode, setMachineCode] = useState('1');
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
+  const [uploadCount, setUploadCount] = useState(32);
+  const [currentDevice, setCurrentDevice] = useState('Desk-A');
+  const [serialNumber, setSerialNumber] = useState('Neal0015B');
+  const [targetIP, setTargetIP] = useState('192.168.222.222');
 
   useEffect(() => {
     const updateTime = () => {
@@ -37,6 +32,63 @@ export function Sidebar({
     const interval = setInterval(updateTime, 1000);
 
     return () => clearInterval(interval);
+  }, []);
+
+  // 监听后端的各个状态更新事件
+  useEffect(() => {
+    // 监听本机编码更新
+    listen('machine-code-update', (event) => {
+      const code = event.payload as string;
+      console.log('收到本机编码更新:', code);
+      setMachineCode(code);
+    }).catch(error => {
+      console.error('设置本机编码监听器失败:', error);
+    });
+
+    // 监听服务器状态更新
+    listen('server-status-update', (event) => {
+      const status = event.payload as string;
+      console.log('收到服务器状态更新:', status);
+      setServerStatus(status as 'online' | 'offline');
+    }).catch(error => {
+      console.error('设置服务器状态监听器失败:', error);
+    });
+
+    // 监听待上传数量更新
+    listen('upload-count-update', (event) => {
+      const count = event.payload as number;
+      console.log('收到待上传数量更新:', count);
+      setUploadCount(count);
+    }).catch(error => {
+      console.error('设置待上传数量监听器失败:', error);
+    });
+
+    // 监听当前硬件更新
+    listen('current-device-update', (event) => {
+      const device = event.payload as string;
+      console.log('收到当前硬件更新:', device);
+      setCurrentDevice(device);
+    }).catch(error => {
+      console.error('设置当前硬件监听器失败:', error);
+    });
+
+    // 监听序列号更新
+    listen('serial-number-update', (event) => {
+      const serial = event.payload as string;
+      console.log('收到序列号更新:', serial);
+      setSerialNumber(serial);
+    }).catch(error => {
+      console.error('设置序列号监听器失败:', error);
+    });
+
+    // 监听目标IP更新
+    listen('target-ip-update', (event) => {
+      const ip = event.payload as string;
+      console.log('收到目标IP更新:', ip);
+      setTargetIP(ip);
+    }).catch(error => {
+      console.error('设置目标IP监听器失败:', error);
+    });
   }, []);
 
   const toggleTheme = () => {
