@@ -89,11 +89,11 @@ export function Terminal({ isOpen, onClose, isDark }: TerminalProps) {
     if (!isOpen) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      // ESC键关闭终端
-      if (e.key === 'Escape') {
-        handleClose();
-        return;
-      }
+      // ESC键关闭终端 删除该功能，串口终端下ESC按键要正确的被Xterm.js识别
+      // if (e.key === 'Escape') {
+      //   handleClose();
+      //   return;
+      // }
 
       // 捕获所有键盘输入发送到后端
       // @ts-ignore
