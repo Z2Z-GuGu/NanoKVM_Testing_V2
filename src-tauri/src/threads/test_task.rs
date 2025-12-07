@@ -69,7 +69,7 @@ pub fn spawn_test_task(app_handle: AppHandle) {
             status_toggle = !status_toggle;
             let status = if status_toggle { "online" } else { "offline" };
             
-            println!("测试任务：推送服务器状态 - {}", status);
+            // println!("测试任务：推送服务器状态 - {}", status);
             
             // 推送服务器状态更新
             if let Err(e) = app_handle.emit("server-status-update", status) {

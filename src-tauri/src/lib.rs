@@ -1,10 +1,4 @@
-
-
-mod test_task;
-
-
-
-
+mod threads;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,8 +6,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![])
         .setup(move |app| {
-            // 启动测试任务线程 - 定期切换服务器状态
-            test_task::spawn_test_task(app.handle().clone());
+            // 启动串口功能线程
+            threads::serial::spawn_serial_task(app.handle().clone());
+            // 启动测试任务线程
+            threads::test_task::spawn_test_task(app.handle().clone());
             
             Ok(())
         })

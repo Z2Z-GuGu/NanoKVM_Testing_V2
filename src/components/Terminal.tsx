@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { Terminal as XTerminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
 
 interface TerminalProps {
   isOpen: boolean;
@@ -7,10 +10,12 @@ interface TerminalProps {
 }
 
 export function Terminal({ isOpen, onClose, isDark }: TerminalProps) {
-  const [output, setOutput] = useState<string[]>([]);
   const [isClosing, setIsClosing] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
+  const terminalInstanceRef = useRef<XTerminal | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   // 处理打开动画
   useEffect(() => {
@@ -32,25 +37,113 @@ export function Terminal({ isOpen, onClose, isDark }: TerminalProps) {
     }, 300); // 与动画时长一致
   };
 
-  // 自动滚动到底部
+  // 初始化终端
   useEffect(() => {
-    if (terminalRef.current) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-    }
-  }, [output]);
+    if (!isOpen || !terminalRef.current) return;
 
-  // 监听来自Tauri后端的消息
+    // 初始化xterm.js终端
+    const terminal = new XTerminal({
+      fontSize: 12,
+      fontFamily: 'monospace',
+      theme: {
+        foreground: isDark ? '#FFFFFF' : '#000000',
+        background: isDark ? '#262626' : '#E5E5E5',
+        cursor: isDark ? '#FFFFFF' : '#000000',
+      },
+      lineHeight: 1.2,
+    });
+
+    // 初始化fit addon
+    const fitAddon = new FitAddon();
+    terminal.loadAddon(fitAddon);
+
+    // 打开终端
+    terminal.open(terminalRef.current);
+
+    // 调整终端大小以适应容器
+    setTimeout(() => {
+      fitAddon.fit();
+    }, 0);
+
+    // 保存终端实例和fit addon
+    terminalInstanceRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
+    // 处理窗口大小变化
+    const handleResize = () => {
+      if (fitAddonRef.current && terminalInstanceRef.current) {
+        fitAddonRef.current.fit();
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    // 处理终端输入
+    terminal.onData((data) => {
+      // 发送数据到后端
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(data);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      terminal.dispose();
+    };
+  }, [isOpen, isDark]);
+
+  // 建立WebSocket连接
   useEffect(() => {
     if (!isOpen) return;
 
-    // 这里使用Tauri的事件监听
+    // 建立WebSocket连接
+    const ws = new WebSocket('ws://localhost:8080');
+    
+    ws.onopen = () => {
+      console.log('WebSocket连接已建立');
+    };
+
+    ws.onmessage = (event) => {
+      // 接收来自后端的数据并显示在终端
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.write(event.data);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket连接已关闭');
+      // 显示断开连接消息
+      if (terminalInstanceRef.current) {
+        terminalInstanceRef.current.write('[disconnected]\n');
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket错误:', error);
+    };
+
+    // 保存WebSocket实例
+    wsRef.current = ws;
+
+    return () => {
+      ws.close();
+    };
+  }, [isOpen]);
+
+  // 监听Tauri事件（用于开发模式）
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 这里使用Tauri的事件监听（开发模式下的模拟数据）
     // @ts-ignore - Tauri API
     if (window.__TAURI__) {
       // @ts-ignore
       const { listen } = window.__TAURI__.event;
       
       const unlisten = listen('terminal-output', (event: any) => {
-        setOutput(prev => [...prev, event.payload]);
+        if (terminalInstanceRef.current) {
+          terminalInstanceRef.current.write(event.payload);
+        }
       });
 
       return () => {
@@ -59,53 +152,19 @@ export function Terminal({ isOpen, onClose, isDark }: TerminalProps) {
     } else {
       // 开发模式下的模拟数据
       const mockData = [
-        '[ 13.160778] fbift_of_value: fps = 90',
-        '[ 13.160878] fb_jd9853 spi2.1: fbift_request_one_gpio: \'reset-gpios\' = GPI041',
-        '[ 13.160895] fb_jd9853 spi2.1: fbift_request_one_gpio: \'de-gpios\' = GPI043',
-        '[ 13.160927] fb_jd9853 spi2.1: debug mode: off',
-        '[ 13.756609] using random self ethernet address',
-        '[ 13.756617] using random host ethernet address',
-        '[ 13.160778] fbift_of_value: fps = 90',
-        '[ 13.160878] fb_jd9853 spi2.1: fbift_request_one_gpio: \'reset-gpios\' = GPI041',
-        '[ 13.160895] fb_jd9853 spi2.1: fbift_request_one_gpio: \'de-gpios\' = GPI043',
-        '[ 13.160927] fb_jd9853 spi2.1: debug mode: off',
-        '[ 13.756609] using random self ethernet address',
-        '[ 13.756617] using random host ethernet address',
-        '[ 13.160778] fbift_of_value: fps = 90',
-        '[ 13.160878] fb_jd9853 spi2.1: fbift_request_one_gpio: \'reset-gpios\' = GPI041',
-        '[ 13.160895] fb_jd9853 spi2.1: fbift_request_one_gpio: \'de-gpios\' = GPI043',
-        '[ 13.160927] fb_jd9853 spi2.1: debug mode: off',
-        '[ 13.756609] using random self ethernet address',
-        '[ 13.756617] using random host ethernet address',
-        '[ 13.160778] fbift_of_value: fps = 90',
+        '[connected]\n',
+        '[ 13.160778] fbift_of_value: fps = 90\n',
+        '[ 13.160878] fb_jd9853 spi2.1: fbift_request_one_gpio: \'reset-gpios\' = GPI041\n',
+        '[ 13.160895] fb_jd9853 spi2.1: fbift_request_one_gpio: \'de-gpios\' = GPI043\n',
+        '[ 13.160927] fb_jd9853 spi2.1: debug mode: off\n',
       ];
       
-      setOutput(mockData);
-    }
-  }, [isOpen]);
-
-  // 监听全局键盘事件
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // ESC键关闭终端 删除该功能，串口终端下ESC按键要正确的被Xterm.js识别
-      // if (e.key === 'Escape') {
-      //   handleClose();
-      //   return;
-      // }
-
-      // 捕获所有键盘输入发送到后端
-      // @ts-ignore
-      if (window.__TAURI__) {
-        // @ts-ignore
-        const { invoke } = window.__TAURI__.tauri;
-        invoke('send_terminal_key', { key: e.key });
+      if (terminalInstanceRef.current) {
+        mockData.forEach(line => {
+          terminalInstanceRef.current?.write(line);
+        });
       }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
+    }
   }, [isOpen]);
 
   if (!isOpen && !isClosing) return null;
@@ -137,23 +196,12 @@ export function Terminal({ isOpen, onClose, isDark }: TerminalProps) {
         {/* 终端输出区域 - 全屏可输入 */}
         <div 
           ref={terminalRef}
-          className="w-full h-full overflow-y-auto px-6 py-4"
+          className="w-full h-full"
           style={{
             marginTop: '8px',
             height: '97%',
           }}
-        >
-          <div className="font-mono text-sm space-y-1">
-            {output.map((line, index) => (
-              <div 
-                key={index}
-                className={isDark ? 'text-neutral-300' : 'text-neutral-800'}
-              >
-                {line}
-              </div>
-            ))}
-          </div>
-        </div>
+        />
       </div>
     </>
   );

@@ -1,6 +1,9 @@
 # 串口终端功能项目需求
 
 这是一个tuari项目，前端使用React+Typescript做框架，后端使用rust，使用pnpm tauri dev做测试，只需要考虑tauri下的效果，无需做网页兼容，所以测试由我来做。
+实现效果图如下：
+![串口终端明亮模式效果图](img/Light-UartTerminal.png)
+![串口终端暗黑模式效果图](img/Dark-UartTerminal.png)
 在现有框架下增加串口终端功能，后端负责串口设备的自动扫描和连接，前端负责串口数据的显示和发送。以下为实现细则：
 
 ## 后端
