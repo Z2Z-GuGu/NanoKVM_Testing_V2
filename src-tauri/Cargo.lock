@@ -2178,6 +2178,7 @@ dependencies = [
  "futures",
  "image",
  "lazy_static",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "serialport",
@@ -2186,6 +2187,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tokio",
  "tokio-serial",
+ "winapi",
 ]
 
 [[package]]

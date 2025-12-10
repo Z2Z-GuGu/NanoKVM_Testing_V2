@@ -13,12 +13,12 @@ const TARGET_VID: u16 = 0x1a86;
 const TARGET_PID: u16 = 0x55d3;
 const SERIAL_BAUD_RATE: u32 = 115200;
 
-// 日志控制：0=开启日志，1=关闭日志
-const LOG_DISABLE: u8 = 0;
+// 日志控制：false=关闭日志，true=开启日志
+const LOG_ENABLE: bool = false;
 
 // 自定义日志函数
 fn log(msg: &str) {
-    if LOG_DISABLE == 0 {
+    if LOG_ENABLE {
         println!("{}", msg);
     }
 }
