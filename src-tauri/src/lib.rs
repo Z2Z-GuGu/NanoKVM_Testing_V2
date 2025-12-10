@@ -7,9 +7,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![])
         .setup(move |app| {
             // 启动串口功能线程
-            threads::serial::spawn_serial_task(app.handle().clone());
+            threads::serial::spawn_serial_task();
             // 启动测试任务线程
             threads::test_task::spawn_test_task(app.handle().clone());
+            // 启动摄像头功能线程
+            threads::camera::spawn_camera_task(app.handle().clone());
             
             Ok(())
         })

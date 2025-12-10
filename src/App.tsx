@@ -5,7 +5,7 @@ import { Terminal } from './components/Terminal';
 import { FloatingButton } from './components/FloatingButton';
 
 export default function App() {
-  const [theme, setTheme] = useState<'明亮' | '暗黑'>('暗黑');
+  const [theme, setTheme] = useState<'明亮' | '暗黑'>('明亮');
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
   const isDark = theme === '暗黑';
