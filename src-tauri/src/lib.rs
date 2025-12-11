@@ -11,7 +11,7 @@ pub fn run() {
             // 启动测试任务线程
             threads::test_task::spawn_test_task(app.handle().clone());
             // 启动摄像头功能线程
-            threads::camera::spawn_camera_task(app.handle().clone());
+            threads::camera::spawn_camera_task();
             
             Ok(())
         })

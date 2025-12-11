@@ -14,12 +14,12 @@ const TARGET_PID: u16 = 0x55d3;
 const SERIAL_BAUD_RATE: u32 = 115200;
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = false;
+const LOG_ENABLE: bool = true;
 
 // 自定义日志函数
 fn log(msg: &str) {
     if LOG_ENABLE {
-        println!("{}", msg);
+        println!("[serial]{}", msg);
     }
 }
 
