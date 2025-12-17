@@ -1,10 +1,13 @@
 mod threads;
 
+// 从dialog_test模块导入按钮点击处理命令
+use crate::threads::dialog_test::handle_button_click;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![])
+        .invoke_handler(tauri::generate_handler![handle_button_click])
         .setup(move |app| {
             // 启动串口功能线程
             threads::serial::spawn_serial_task();
