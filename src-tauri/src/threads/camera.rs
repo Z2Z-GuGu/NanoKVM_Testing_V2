@@ -11,7 +11,7 @@ use std::thread;
 use std::time::Duration;
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = true;
+const LOG_ENABLE: bool = false;
 
 // 自定义日志函数
 fn log(msg: &str) {
