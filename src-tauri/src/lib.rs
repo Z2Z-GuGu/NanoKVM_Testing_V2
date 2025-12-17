@@ -12,6 +12,8 @@ pub fn run() {
             threads::test_task::spawn_test_task(app.handle().clone());
             // 启动摄像头功能线程
             threads::camera::spawn_camera_task();
+            // 启动打印机功能线程
+            threads::printer::spawn_printer_task();
             
             Ok(())
         })

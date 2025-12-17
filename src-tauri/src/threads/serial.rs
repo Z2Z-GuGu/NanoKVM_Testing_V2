@@ -7,6 +7,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, ErrorKind};
 use tokio::time::{sleep, timeout};
 use tauri::async_runtime::spawn;
 use lazy_static::lazy_static;
+use strip_ansi_escapes::strip;
 
 // 定义PID/VID和波特率
 const TARGET_VID: u16 = 0x1a86;
@@ -82,6 +83,29 @@ pub async fn serial_receive() -> String {
         }
     } else {
         String::from("接收队列未初始化")
+    }
+}
+
+// 从队列获取数据并清理 ANSI 转义序列
+pub async fn serial_receive_clean() -> String {
+    // 先获取原始数据
+    let raw_data = serial_receive().await;
+    
+    // 如果数据为空或包含错误信息，直接返回
+    if raw_data.is_empty() || 
+       raw_data == "接收队列已关闭" || 
+       raw_data == "接收队列未初始化" {
+        return raw_data;
+    }
+    
+    // 清理 ANSI 转义序列
+    let cleaned_bytes = strip(raw_data.as_bytes());
+    match String::from_utf8(cleaned_bytes) {
+        Ok(cleaned_string) => {
+            // 去除首尾空白字符
+            cleaned_string.trim().to_string()
+        }
+        Err(_) => raw_data, // 如果 UTF-8 转换失败，返回原始数据
     }
 }
 
@@ -194,10 +218,12 @@ pub fn spawn_serial_task() {
         
         // 循环执行以下任务：发送"test"、接收数据、sleep 1秒
         loop {
-            serial_send("test").await;
-            let received = serial_receive().await;
+            // serial_send("test").await;
+            // let received = serial_receive().await; 
+            let received = serial_receive_clean().await;
+
             log(&format!("接收到数据: {}", received));
-            sleep(Duration::from_secs(1)).await;
+            // sleep(Duration::from_secs(1)).await;
         }
     });
 }

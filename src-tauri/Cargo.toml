@@ -27,8 +27,12 @@ tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 tokio-serial = "5.4.4"
 nokhwa = { version = "0.10", features = ["input-v4l", "input-msmf", "input-avfoundation"] }
-image = "0.24"
+image = "0.24" 
+qrcode = "0.13"
 lazy_static = "1.4.0"
-winapi = { version = "0.3", features = ["setupapi", "combaseapi", "dbt", "winbase", "winuser", "winerror"] }
+winapi = { version = "0.3", features = ["setupapi", "combaseapi", "dbt", "winbase", "winuser", "winerror", "wingdi", "winspool"] }
+rusttype = "0.9"
+nusb = "0.1"
 rand = "0.8"
+strip-ansi-escapes = "0.2"
 
