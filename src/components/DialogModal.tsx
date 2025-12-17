@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
+
+// 扩展 Window 类型以包含 __TAURI__
+declare global {
+  interface Window {
+    __TAURI__?: any;
+  }
+}
 
 export interface DialogButton {
   text: string;
@@ -7,14 +15,16 @@ export interface DialogButton {
 }
 
 interface DialogModalProps {
-  isOpen: boolean;
-  onClose: () => void;
   isDark: boolean;
-  message: string;
-  buttons: DialogButton[];
 }
 
-export function DialogModal({ isOpen, onClose, isDark, message, buttons }: DialogModalProps) {
+// 开发环境检测 - 移到组件内部以便动态检测
+
+export function DialogModal({ isDark }: DialogModalProps) {
+  // 内部管理弹窗状态
+  const [isOpen, setIsOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [buttons, setButtons] = useState<DialogButton[]>([]);
   const [isClosing, setIsClosing] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -33,7 +43,10 @@ export function DialogModal({ isOpen, onClose, isDark, message, buttons }: Dialo
     setIsAnimating(false);
     setTimeout(() => {
       setIsClosing(false);
-      onClose();
+      setIsOpen(false);
+      // 清空状态
+      setMessage("");
+      setButtons([]);
     }, 200);
   };
 
@@ -58,6 +71,62 @@ export function DialogModal({ isOpen, onClose, isDark, message, buttons }: Dialo
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isOpen]);
+
+  // 监听后端弹窗事件 - 使用与Sidebar相同的简单实现方式
+  useEffect(() => {
+    console.log('DialogModal: 开始监听后端弹窗事件...');
+    
+    // 直接监听弹窗事件，与Sidebar组件保持一致的实现方式
+    const unlistenShow = listen('show-dialog', (event) => {
+      console.log('DialogModal: 接收到弹窗事件:', event);
+      console.log('DialogModal: 事件负载:', event.payload);
+      
+      try {
+        // 解析事件数据
+        const { message, buttons } = event.payload as {
+          message: string;
+          buttons: DialogButton[];
+        };
+        
+        console.log('DialogModal: 解析后的弹窗数据:', { message, buttons });
+        
+        // 更新状态显示弹窗
+        setMessage(message || '');
+        setButtons(buttons || [{ text: '确定' }]);
+        setIsOpen(true);
+        
+        console.log('DialogModal: 弹窗已显示');
+      } catch (parseError) {
+        console.error('DialogModal: 解析弹窗事件数据失败:', parseError);
+      }
+    }).catch(error => {
+      console.error('DialogModal: 设置弹窗事件监听器失败:', error);
+    });
+    
+    // 监听关闭弹窗事件
+    const unlistenHide = listen('hide-dialog', (event) => {
+      console.log('DialogModal: 接收到关闭弹窗事件:', event);
+      console.log('DialogModal: 事件负载:', event.payload);
+      
+      try {
+        // 关闭弹窗
+        handleClose();
+        console.log('DialogModal: 弹窗已关闭');
+      } catch (parseError) {
+        console.error('DialogModal: 处理关闭弹窗事件失败:', parseError);
+      }
+    }).catch(error => {
+      console.error('DialogModal: 设置关闭弹窗事件监听器失败:', error);
+    });
+    
+    // 清理函数
+    return () => {
+      console.log('DialogModal: 清理事件监听器');
+      // 清理监听器
+      if (unlistenShow) unlistenShow.then(unlisten => unlisten());
+      if (unlistenHide) unlistenHide.then(unlisten => unlisten());
+    };
+  }, []);
 
   if (!isOpen && !isClosing) return null;
 

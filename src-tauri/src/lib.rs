@@ -14,6 +14,8 @@ pub fn run() {
             threads::camera::spawn_camera_task();
             // 启动打印机功能线程
             threads::printer::spawn_printer_task();
+            // 启动弹窗测试任务线程
+            threads::dialog_test::spawn_dialog_test_task(app.handle().clone());
             
             Ok(())
         })
