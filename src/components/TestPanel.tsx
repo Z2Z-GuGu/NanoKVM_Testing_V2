@@ -1,6 +1,6 @@
 import { TestButton } from './TestButton';
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+
 import { TestButtonStatus, TestButtonId } from '../services/backendService';
 
 interface TestPanelProps {

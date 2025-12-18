@@ -126,8 +126,12 @@ export function DialogModal({ isDark }: DialogModalProps) {
     return () => {
       console.log('DialogModal: 清理事件监听器');
       // 清理监听器
-      if (unlistenShow) unlistenShow.then(unlisten => unlisten());
-      if (unlistenHide) unlistenHide.then(unlisten => unlisten());
+      if (unlistenShow) unlistenShow.then((unlisten) => {
+        if (typeof unlisten === 'function') unlisten();
+      });
+      if (unlistenHide) unlistenHide.then((unlisten) => {
+        if (typeof unlisten === 'function') unlisten();
+      });
     };
   }, []);
 
