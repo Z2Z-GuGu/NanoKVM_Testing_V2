@@ -284,10 +284,10 @@ async fn serial_management_task() {
 // 等待指定串口数据，带超时设置，单位：毫秒
 async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
     // log(&format!("等待串口数据: {:?}", expected));
-    let mut received = String::new();
+    // let mut received = String::new();
     let timeout_time = Instant::now() + Duration::from_millis(timeout_ms);
     loop {
-        received = serial_receive_clean().await;
+        let received = serial_receive_clean().await;
         if !received.is_empty() {
             if received.as_bytes().windows(expected.len()).any(|window| window == expected) {
                 // log(&format!("当前串口数据: {:?}", received));
@@ -298,8 +298,6 @@ async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
         if Instant::now() >= timeout_time {
             return false;
         }
-        // 清空received
-        received.clear();
     }
 }
 

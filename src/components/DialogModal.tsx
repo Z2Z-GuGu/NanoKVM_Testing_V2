@@ -70,20 +70,6 @@ export function DialogModal({ isDark }: DialogModalProps) {
     handleClose();
   };
 
-  // 监听ESC键关闭弹窗
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        handleClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isOpen]);
-
   // 监听后端弹窗事件 - 使用与Sidebar相同的简单实现方式
   useEffect(() => {
     console.log('DialogModal: 开始监听后端弹窗事件...');
@@ -150,7 +136,6 @@ export function DialogModal({ isDark }: DialogModalProps) {
         className={`fixed inset-0 transition-opacity duration-200 z-40 bg-black/60 ${
           isClosing ? 'opacity-0' : 'opacity-100'
         }`}
-        onClick={handleClose}
       />
 
       {/* 弹窗内容 */}
