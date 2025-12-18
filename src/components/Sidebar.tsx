@@ -96,7 +96,7 @@ export function Sidebar({
   };
 
   return (
-    <aside className={`w-[280px] ${isDark ? 'bg-neutral-800' : 'bg-neutral-300'} p-5 flex flex-col justify-between`}>
+    <aside className={`w-[300px] ${isDark ? 'bg-neutral-800' : 'bg-neutral-300'} p-5 flex flex-col justify-between`}>
       <div>
         <div className={'mb-16 mt-1'}>
           <div className="flex flex-col">
