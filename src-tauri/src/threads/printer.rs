@@ -129,6 +129,54 @@ fn draw_text(
     }
 }
 
+// 绘制中文函数
+fn draw_chinese(
+    img: &mut RgbImage,
+    x: u32,          // 整数坐标
+    y: u32,          // 整数坐标
+    text: &str,
+    font_size: u32,  // 整数字体大小
+    font_color: [u8; 3],
+) {
+    // 计算二维码在打印机上的实际位置，考虑XY轴偏移
+    let x = x + PRINTER_X_OFFSET as u32;
+    let y = y + PRINTER_Y_OFFSET as u32;
+
+    // 1. 使用内置的简单字体数据
+    let font_data: &[u8] = include_bytes!("../../fonts/SourceHanSansOLD-Medium-2.otf");
+    
+    let font = match Font::try_from_bytes(font_data) {
+        Some(f) => f,
+        None => return,
+    };
+    
+    // 2. 设置字体大小（u32 转 f32）
+    let scale = Scale::uniform(font_size as f32);
+    
+    // 3. 计算基线位置并绘制（u32 转 f32）
+    let v_metrics = font.v_metrics(scale);
+    let start = point(x as f32, y as f32 + v_metrics.ascent);
+    
+    // 4. 布局和绘制字形
+    for glyph in font.layout(text, scale, start) {
+        if let Some(bounding_box) = glyph.pixel_bounding_box() {
+            glyph.draw(|gx, gy, gv| {
+                let gx = gx as i32 + bounding_box.min.x;
+                let gy = gy as i32 + bounding_box.min.y;
+                
+                if gx >= 0 
+                    && gy >= 0 
+                    && (gx as u32) < img.width() 
+                    && (gy as u32) < img.height()
+                    && gv > 0.3
+                {
+                    img.put_pixel(gx as u32, gy as u32, Rgb(font_color));
+                }
+            });
+        }
+    }
+}
+
 // 绘制线条函数
 fn draw_line(img: &mut RgbImage, x1: u32, y1: u32, x2: u32, y2: u32, color: [u8; 3], line_width: u32) {
     // 计算二维码在打印机上的实际位置，考虑XY轴偏移
@@ -385,6 +433,62 @@ fn generate_image_with_params(serial: &str, name: &str, exist_wifi: bool) -> Ima
         draw_filled_circle_fast(&mut img, 333, 72, 15, [0, 0, 0]);
     }
 
+    // save to output.png
+    img.save("../img/output.png").expect("无法保存图像");
+
+    img
+}
+
+// 参数化不良贴纸图像生成函数
+fn generate_defects_image_with_params(text: &str) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+    let width_px = mm_to_pixels(WIDTH_MM) as u32;
+    let height_px = mm_to_pixels(HEIGHT_MM) as u32;
+    let zero_x = 10u32;
+    let zero_y = 5u32;
+    let line_height = 30u32;
+    
+    // 创建空白图像
+    let mut img = ImageBuffer::new(width_px, height_px);
+    
+    // 填充白色背景
+    for pixel in img.pixels_mut() {
+        *pixel = Rgb([255, 255, 255]);
+    }
+
+    // 每14个字符或遇到换行符时截取到下一段
+    let mut segments = Vec::new();
+    let mut current_segment = String::new();
+    
+    for c in text.chars() {
+        if c == '\n' {
+            // 遇到换行符，结束当前段
+            if !current_segment.is_empty() {
+                segments.push(current_segment);
+                current_segment = String::new();
+            }
+        } else {
+            current_segment.push(c);
+            // 达到14个中文（42个字符），结束当前段
+            if current_segment.len() >= 42 {
+                segments.push(current_segment);
+                current_segment = String::new();
+            }
+        }
+    }
+    
+    // 添加最后一个未完成的段
+    if !current_segment.is_empty() {
+        segments.push(current_segment);
+    }
+    
+    // 绘制每一段文本
+    for (i, segment) in segments.iter().enumerate() {
+        draw_chinese(&mut img, zero_x, zero_y + line_height * i as u32, segment, 24, [0, 0, 0]);
+    }
+
+    // save to output.png
+    img.save("../img/defects.png").expect("无法保存图像");
+
     img
 }
 
@@ -512,6 +616,8 @@ pub fn spawn_printer_task() {
     
         let test_serial = "Neal00150";
         let test_name = "NanoKVM-ATX-B";
+
+        let _img0 = generate_defects_image_with_params("不良贴纸不良\n贴纸不良贴纸不良贴纸不良贴纸贴纸不良贴纸不良贴纸贴纸不良贴纸不良贴纸"); // 测试换行符分割
         
         if printer_exists(TARGET_PRINTER) {
             let img = generate_image_with_params(test_serial, test_name, true);
