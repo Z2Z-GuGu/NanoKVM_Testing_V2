@@ -19,6 +19,8 @@ pub fn run() {
             threads::printer::spawn_printer_task();
             // 启动弹窗测试任务线程
             threads::dialog_test::spawn_dialog_test_task(app.handle().clone());
+            // 启动定时器功能线程
+            threads::timer::spawn_timer_task();
             
             Ok(())
         })

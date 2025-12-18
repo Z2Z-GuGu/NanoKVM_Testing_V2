@@ -1,6 +1,6 @@
 use serialport::{SerialPortType};
 use tokio_serial::{SerialStream, new, SerialPortBuilderExt};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::sync::Arc;
 use tokio::sync::{Mutex, mpsc};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ErrorKind};
@@ -8,11 +8,28 @@ use tokio::time::{sleep, timeout};
 use tauri::async_runtime::spawn;
 use lazy_static::lazy_static;
 use strip_ansi_escapes::strip;
+use crate::threads::timer::{TimerHandle, create_timer, check_timer, reset_timer, delete_timer};
 
 // 定义PID/VID和波特率
 const TARGET_VID: u16 = 0x1a86;
 const TARGET_PID: u16 = 0x55d3;
 const SERIAL_BAUD_RATE: u32 = 115200;
+
+const OVERTIME_ENTER: u64 = 3;          // 回车验活时间:3秒
+const OVERTIME_LOST_KVM: u64 = 5;       // 最长无响应时间:5秒
+
+// 登录默认账号密码
+const DEFAULT_USERNAME: &str = "root";
+const DEFAULT_PASSWORD: &str = "sipeed";
+
+// 超时时间
+const OVERTIME_LOGIN: u64 = 60000;      // 登录超时时间:60秒
+const OVERTIME_PASSWORD: u64 = 5000;    // 密码超时时间:5秒
+const OVERTIME_LOGIN_SUCCESS: u64 = 10000;    // 登录成功超时时间:10秒
+const OVERTIME_COMMAND: u64 = 2000;    // 普通命令超时时间:2秒
+const OVERTIME_COMMAND_SHORT: u64 = 1000;    // 短命令超时时间:1秒
+
+
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -25,7 +42,7 @@ fn log(msg: &str) {
 }
 
 // 枚举USB工具状态队列状态
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum UsbToolStatus {
     Unknown,        // 未知状态/初始状态
     Connected,      // 瞬态：USB工具已连接（未连接NanoKVM-Pro）
@@ -33,11 +50,11 @@ pub enum UsbToolStatus {
     Disconnected,   // 瞬态：USB工具已断开
 }
 
-// 定义全局收发队列
+// 定义全局收发队列和USB工具状态
 lazy_static! {
     pub static ref SEND_QUEUE: Mutex<Option<mpsc::Sender<Vec<u8>>>> = Mutex::new(None);         // 串口数据发送队列
     pub static ref RECEIVE_QUEUE: Mutex<Option<mpsc::Receiver<Vec<u8>>>> = Mutex::new(None);    // 串口数据接收队列
-    pub static ref USB_TOOL_STATUS_QUEUE: Mutex<Option<mpsc::Sender<bool>>> = Mutex::new(None);       // USB工具状态队列
+    pub static ref USB_TOOL_STATUS: Mutex<UsbToolStatus> = Mutex::new(UsbToolStatus::Unknown);  // USB工具状态全局变量
 }
 
 // 扫描指定PID/VID的串口
@@ -87,9 +104,10 @@ pub async fn serial_receive() -> String {
     // 获取全局接收队列
     let mut receive_queue_guard = RECEIVE_QUEUE.lock().await;
     if let Some(receive_queue) = &mut *receive_queue_guard {
-        match receive_queue.recv().await {
-            Some(data) => String::from_utf8_lossy(&data).to_string(),
-            None => String::from("接收队列已关闭"),
+        match receive_queue.try_recv() {
+            Ok(data) => String::from_utf8_lossy(&data).to_string(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Empty) => String::new(),
+            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => String::from("接收队列已关闭"),
         }
     } else {
         String::from("接收队列未初始化")
@@ -131,7 +149,6 @@ async fn serial_management_task() {
     // 创建发送和接收队列
     let (send_queue_tx, mut send_queue_rx) = mpsc::channel::<Vec<u8>>(100);
     let (receive_queue_tx, receive_queue_rx) = mpsc::channel::<Vec<u8>>(100);
-    let (usb_tool_status_queue_tx, usb_tool_status_queue_rx) = mpsc::channel::<UsbToolStatus>(100);
     
     // 将队列存储到全局静态变量中
     {
@@ -143,11 +160,6 @@ async fn serial_management_task() {
         let mut receive_queue_guard = RECEIVE_QUEUE.lock().await;
         *receive_queue_guard = Some(receive_queue_rx);
     }
-    
-    {
-        let mut usb_tool_status_queue_guard = USB_TOOL_STATUS_QUEUE.lock().await;
-        *usb_tool_status_queue_guard = Some(usb_tool_status_queue_rx);
-    }
 
     
     log("串口管理线程已启动");
@@ -158,11 +170,11 @@ async fn serial_management_task() {
             // log("检查串口连接状态...");
             if let Some(port_name) = scan_serial_port(TARGET_PID, TARGET_VID) {
                 if last_connection_status == UsbToolStatus::Unknown || last_connection_status == UsbToolStatus::Disconnected {
-                    log("✅USB测试器已连接");
+                    // log("✅USB测试器已连接");
                     last_connection_status = UsbToolStatus::Connected;
-                    if let Err(e) = usb_tool_status_queue_tx.send(last_connection_status).await {
-                        log(&format!("发送USB工具状态到队列失败: {:?}", e));
-                    }
+                    // 更新全局USB工具状态
+                    let mut status_guard = USB_TOOL_STATUS.lock().await;
+                    *status_guard = last_connection_status;
                 }
                 // log(&format!("找到串口: {}", port_name));
                 if let Some(port) = connect_serial_port(&port_name).await {
@@ -170,18 +182,20 @@ async fn serial_management_task() {
                     serial_port = Some(port);
                     if serial_connect_err_count >= RECONNECT_MIN_SERIAL_CONNECT_ERR_COUNT {
                         if serial_connect_err_count <= RECONNECT_MAX_SERIAL_CONNECT_ERR_COUNT {
-                            log(&format!("检测到NanoKVM-Pro连接"));
+                            // log(&format!("检测到NanoKVM-Pro连接"));
                             last_connection_status = UsbToolStatus::ConnectKVM;
                         } else {
-                            log("理论不存在的情况：串口连接错误次数超过最大重试次数，暂时认为连接到KVM");
+                            // log("理论不存在的情况：串口连接错误次数超过最大重试次数，暂时认为连接到KVM");
                             last_connection_status = UsbToolStatus::ConnectKVM;
                         }
-                        // 发送状态
-                        if let Err(e) = usb_tool_status_queue_tx.send(last_connection_status).await {
-                            log(&format!("发送USB工具状态到队列失败: {:?}", e));
-                        }
+                        // 更新全局USB工具状态
+                        let mut status_guard = USB_TOOL_STATUS.lock().await;
+                        *status_guard = last_connection_status;
                     } else {
-                        log("USB测试工具已连接，但未检测到NanoKVM-Pro");
+                        // log("USB测试工具已连接，但未检测到NanoKVM-Pro");
+                        // 更新全局USB工具状态
+                        let mut status_guard = USB_TOOL_STATUS.lock().await;
+                        *status_guard = last_connection_status;
                     }
                     serial_connect_err_count = 0;
                 } else {
@@ -190,17 +204,18 @@ async fn serial_management_task() {
                     if serial_connect_err_count >= MAX_SERIAL_CONNECT_ERR_COUNT {
                         serial_connect_err_count = MAX_SERIAL_CONNECT_ERR_COUNT;
                     }
-                    log(&format!("连接串口失败{}次", serial_connect_err_count));
+                    // log(&format!("连接串口失败{}次", serial_connect_err_count));
                 }
             } else {
                 // 找不到USB测试器
-                serial_connect_err_count = 0;
                 if last_connection_status != UsbToolStatus::Disconnected {
-                    log("❌USB测试器已断开");
+                    // log("❌USB测试器已断开");
                     last_connection_status = UsbToolStatus::Disconnected;
-                    if let Err(e) = usb_tool_status_queue_tx.send(last_connection_status).await {
-                        log(&format!("发送USB工具状态到队列失败: {:?}", e));
-                    }
+                    // 更新全局USB工具状态
+                    let mut status_guard = USB_TOOL_STATUS.lock().await;
+                    *status_guard = last_connection_status;
+                } else {
+                    serial_connect_err_count = 0;
                 }
             }
             sleep(Duration::from_secs(1)).await;
@@ -266,24 +281,221 @@ async fn serial_management_task() {
     }
 }
 
+// 等待指定串口数据，带超时设置，单位：毫秒
+async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
+    // log(&format!("等待串口数据: {:?}", expected));
+    let mut received = String::new();
+    let timeout_time = Instant::now() + Duration::from_millis(timeout_ms);
+    loop {
+        received = serial_receive_clean().await;
+        if !received.is_empty() {
+            if received.as_bytes().windows(expected.len()).any(|window| window == expected) {
+                // log(&format!("当前串口数据: {:?}", received));
+                return true;    
+            }
+        }
+        // log(&format!("等待串口数据{:?}当前超时剩余时间: {:?}", expected, timeout_time - Instant::now()));
+        if Instant::now() >= timeout_time {
+            return false;
+        }
+        // 清空received
+        received.clear();
+    }
+}
+
+// 修改USB工具状态为Connected
+async fn set_usb_tool_status_connected() {
+    // 如果是ConnectKVM状态才会修改到Connected
+    let current_status = USB_TOOL_STATUS.lock().await;
+    if *current_status != UsbToolStatus::ConnectKVM {
+        drop(current_status); // 提前释放锁
+        log("非连接KVM状态，直接退出");
+        return;
+    }
+    drop(current_status); // 提前释放锁
+
+    let mut usb_tool_status = USB_TOOL_STATUS.lock().await;
+    *usb_tool_status = UsbToolStatus::Connected;
+}
+
+// 执行命令并等待完成
+async fn execute_command_and_wait(command: &str, ret_str: &str, exit: bool) -> bool {
+    serial_send(command).await;
+    if ! wait_for_serial_data(ret_str.as_bytes(), OVERTIME_COMMAND).await {
+        if exit {
+            log(&format!("发送{}超时", command));
+            set_usb_tool_status_connected().await;
+        }
+        return false;
+    }
+    return true;
+}
+
+// 串口系统操作线程
+async fn serial_system_operation_task() {
+    // 如果非连接KVM状态直接退出
+    let current_status = USB_TOOL_STATUS.lock().await;
+    if *current_status != UsbToolStatus::ConnectKVM {
+        drop(current_status); // 提前释放锁
+        log("非连接KVM状态，直接退出");
+        return;
+    }
+    drop(current_status); // 提前释放锁
+
+    // delsy 10s 避免进入uboot
+    log("正在启动...");
+    sleep(Duration::from_secs(10)).await;
+
+    // 发送回车看有没有#
+    serial_send("\r\n").await;
+    if ! wait_for_serial_data(b":~#", OVERTIME_COMMAND_SHORT).await {
+        // 未登录状态需要登录
+        serial_send("\r\n").await;
+        // 等待登录提示
+        log("等待登录提示");
+        if ! wait_for_serial_data(b"login:", OVERTIME_LOGIN).await {
+            log("登录超时");
+            set_usb_tool_status_connected().await;
+            return;
+        }
+        // 发送用户名
+        log("发送用户名");
+        let username = format!("{}\r\n", DEFAULT_USERNAME);
+        serial_send(&username).await;
+        // 等待密码提示
+        if ! wait_for_serial_data(b"Password:", OVERTIME_PASSWORD).await {
+            log("密码超时");
+            set_usb_tool_status_connected().await;
+            return;
+        }
+        // 发送密码
+        log("发送密码");
+        let password = format!("{}\r\n", DEFAULT_PASSWORD);
+        serial_send(&password).await;
+        // 等待登录成功
+        if ! wait_for_serial_data(b"#", OVERTIME_LOGIN_SUCCESS).await {
+            log("登录错误");
+            set_usb_tool_status_connected().await;
+            return;
+        }
+    }
+
+    // 设置静态IP
+    // 关闭dhcp
+    log("关闭dhcp");
+    if ! execute_command_and_wait("sudo pkill dhclient \r\n", "#", true).await { return };
+    // 验证IP是否设置成功
+    log("验证IP是否设置成功");
+    while ! execute_command_and_wait("ping -c 1 172.168.100.1\r\n", "time", false).await {
+        // 清空ip
+        log("清空ip");
+        if ! execute_command_and_wait("sudo ip addr flush dev eth0\r\n", "#", true).await { return };
+        // 设置静态IP
+        log("设置静态IP");
+        if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\r\n", "#", true).await { return };
+    }
+
+    loop {
+        // sleep 1s
+        sleep(Duration::from_secs(1)).await;
+        log("sleep");
+
+        // 检查USB工具状态是否为ConnectKVM
+        let current_status = USB_TOOL_STATUS.lock().await;
+        if *current_status != UsbToolStatus::ConnectKVM {
+            drop(current_status); // 提前释放锁
+            log("非连接KVM状态，直接退出");
+            return;
+        }
+        drop(current_status); // 提前释放锁
+
+        // 回车验活
+        if ! execute_command_and_wait("\n", "#", true).await { return };
+    }
+}
+
 // 串口数据管理线程
 async fn serial_data_management_task() {
+    let mut last_connection_status = UsbToolStatus::Unknown;
+    let mut none_resv_timer_handle : Option<TimerHandle> = None;
+
     loop {
-        // 获取队列
-        let mut receive_queue_guard = USB_TOOL_STATUS_QUEUE.lock().await;
-        if let Some(usb_tool_status_queue_rx) = &mut *receive_queue_guard.as_mut() {
-            match usb_tool_status_queue_rx.try_recv().await {
-                Ok(data) => {
-                    // 处理接收到的数据
-                    log(&format!("[newest state]: {:?}", data));
+        // 从全局变量获取USB工具状态
+        let current_status = USB_TOOL_STATUS.lock().await;
+        let status = *current_status;
+        drop(current_status); // 提前释放锁
+
+        // 如果状态有变化，更新本地状态
+        if status != last_connection_status {
+            log(&format!("USB工具状态变化: {:?}", status));
+            last_connection_status = status;
+            if status == UsbToolStatus::Connected || status == UsbToolStatus::ConnectKVM {
+                // 一旦进入连接状态就开始计时
+                none_resv_timer_handle = Some(create_timer(100).await);
+                if status == UsbToolStatus::ConnectKVM {
+                    // 连接到NanoKVM，开始系统操作线程
+                    log("连接到NanoKVM，开始系统操作线程");
+                    spawn(serial_system_operation_task());
                 }
-                Err(_) => {
-                    // 队列空，继续下一步
+            } else {
+                // 删除定时器
+                if let Some(handle) = none_resv_timer_handle {
+                    if delete_timer(handle).await {
+                        none_resv_timer_handle = None;
+                    }
                 }
             }
-        } else {
-            log("USB工具状态队列未初始化");
         }
+
+        match last_connection_status {
+            UsbToolStatus::Unknown => {
+                // log("USB工具初始化中...");
+            }
+            UsbToolStatus::Disconnected => {
+                // 处理断开状态
+            }
+            UsbToolStatus::Connected => {
+                // 检测是否连接KVM
+                let received = serial_receive_clean().await;
+                if !received.is_empty() {
+                    // 清零计时器
+                    if let Some(handle) = none_resv_timer_handle {
+                        reset_timer(handle).await;
+                    }
+                    // 更新全局状态为连接到NanoKVM
+                    if status == UsbToolStatus::Connected {
+                        let mut status_guard = USB_TOOL_STATUS.lock().await;
+                        *status_guard = UsbToolStatus::ConnectKVM;
+                    }
+                    // let received = serial_receive_clean().await;
+                    log(&format!("接收到数据: {}", received));
+                }
+
+                // 若计时器超过10s，且状态为连接到NanoKVM，则更新状态为已连接
+                if let Some(handle) = none_resv_timer_handle {
+                    if let Some(timer_value) = check_timer(handle).await {
+                        // log(&format!("定时器值: {}", timer_value));
+                        if timer_value == OVERTIME_ENTER {
+                            serial_send("\r\n").await;
+                            // 等待1s，确保NanoKVM响应
+                            sleep(Duration::from_secs(1)).await;
+                            continue;
+                        }
+                        if timer_value >= OVERTIME_LOST_KVM {
+                            let mut status_guard = USB_TOOL_STATUS.lock().await;
+                            *status_guard = UsbToolStatus::Connected;
+                            // log("NanoKVM已断开");
+                        }
+                    }
+                }
+            }
+            _ => {
+                // 连接到KVM，不需要在这里操作
+            }
+        }
+        
+        // 短暂休眠，避免CPU占用过高
+        sleep(Duration::from_millis(100)).await;
     }
 }
 
@@ -303,9 +515,6 @@ pub fn spawn_serial_task() {
         loop {
             // serial_send("test").await;
             // let received = serial_receive().await; 
-            // let received = serial_receive_clean().await;
-
-            // log(&format!("接收到数据: {}", received));
             sleep(Duration::from_secs(1)).await;
         }
     });

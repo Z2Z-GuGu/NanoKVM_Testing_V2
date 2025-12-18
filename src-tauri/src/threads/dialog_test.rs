@@ -1,20 +1,30 @@
 use std::thread;
 use tauri::{AppHandle, Emitter};
 
+// 日志控制：false=关闭日志，true=开启日志
+const LOG_ENABLE: bool = false;
+
+// 自定义日志函数
+fn log(msg: &str) {
+    if LOG_ENABLE {
+        println!("[dialog_test]{}", msg);
+    }
+}
+
 // 处理前端按钮点击事件的命令
 #[tauri::command]
 pub fn handle_button_click(button_text: String) {
-    println!("前端按钮被按下: {}", button_text);
+    log(&format!("前端按钮被按下: {}", button_text));
 }
 
 pub fn spawn_dialog_test_task(app_handle: AppHandle) {
     thread::spawn(move || {
-        println!("弹窗测试任务线程已启动");
+        log("弹窗测试任务线程已启动");
         
         // 延迟3秒后推送测试弹窗，确保前端已经准备好
         std::thread::sleep(std::time::Duration::from_secs(3));
 
-        println!("推送测试弹窗...");
+        log("推送测试弹窗...");
         
         // 推送测试弹窗信息
         if let Err(e) = app_handle.emit("show-dialog", serde_json::json!({
@@ -24,22 +34,22 @@ pub fn spawn_dialog_test_task(app_handle: AppHandle) {
                 { "text": "取消" }
             ]
         })) {
-            eprintln!("弹窗测试任务推送弹窗失败: {}", e);
+            log(&format!("弹窗测试任务推送弹窗失败: {}", e));
         }
         
         // 延迟5秒后关闭第一个弹窗
         std::thread::sleep(std::time::Duration::from_secs(5));
         
-        println!("关闭第一个测试弹窗...");
+        log("关闭第一个测试弹窗...");
         // 推送关闭弹窗事件
         if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
-            eprintln!("弹窗测试任务关闭弹窗失败: {}", e);
+            log(&format!("弹窗测试任务关闭弹窗失败: {}", e));
         }
         
         // 等待2秒后推送第二个测试弹窗
         std::thread::sleep(std::time::Duration::from_secs(2));
 
-        println!("推送第二个测试弹窗...");
+        log("推送第二个测试弹窗...");
         
         // 推送第二个测试弹窗信息
         if let Err(e) = app_handle.emit("show-dialog", serde_json::json!({
@@ -48,11 +58,11 @@ pub fn spawn_dialog_test_task(app_handle: AppHandle) {
                 { "text": "OK" }
             ]
         })) {
-            eprintln!("弹窗测试任务推送第二个弹窗失败: {}", e);
+            log(&format!("弹窗测试任务推送第二个弹窗失败: {}", e));
         }
         
-        println!("弹窗测试任务完成");
+        log("弹窗测试任务完成");
     });
     
-    println!("弹窗测试任务线程创建完成");
+    log("弹窗测试任务线程创建完成");
 }
