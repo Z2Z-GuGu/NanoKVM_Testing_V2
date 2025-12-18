@@ -15,7 +15,7 @@ export interface DialogButton {
   onClick?: () => void;
 }
 
-interface DialogModalProps {
+export interface DialogModalProps {
   isDark: boolean;
 }
 
@@ -26,6 +26,7 @@ export function DialogModal({ isDark }: DialogModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [buttons, setButtons] = useState<DialogButton[]>([]);
+  const [dialogId, setDialogId] = useState<string | undefined>(undefined);
   const [isClosing, setIsClosing] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
@@ -57,7 +58,8 @@ export function DialogModal({ isDark }: DialogModalProps) {
     
     // 调用后端命令，将按钮文本发送到后端
     invoke('handle_button_click', {
-      buttonText: button.text
+      buttonText: button.text,
+      dialogId: dialogId
     }).then(() => {
       console.log('DialogModal: 后端已接收到按钮点击事件:', button.text);
     }).catch(error => {
@@ -81,16 +83,18 @@ export function DialogModal({ isDark }: DialogModalProps) {
       
       try {
         // 解析事件数据
-        const { message, buttons } = event.payload as {
+        const { message, buttons, dialog_id } = event.payload as {
           message: string;
           buttons: DialogButton[];
+          dialog_id?: string;
         };
         
-        console.log('DialogModal: 解析后的弹窗数据:', { message, buttons });
+        console.log('DialogModal: 解析后的弹窗数据:', { message, buttons, dialog_id });
         
         // 更新状态显示弹窗
         setMessage(message || '');
         setButtons(buttons || [{ text: '确定' }]);
+        setDialogId(dialog_id);
         setIsOpen(true);
         
         console.log('DialogModal: 弹窗已显示');

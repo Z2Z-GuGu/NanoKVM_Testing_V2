@@ -1,8 +1,11 @@
 use std::thread;
-use tauri::{AppHandle, Emitter};
+use std::sync::{Arc, Mutex};
+use lazy_static::lazy_static;
+use uuid::Uuid;
+use tauri::{AppHandle, Emitter, Manager};
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = false;
+const LOG_ENABLE: bool = true;
 
 // 自定义日志函数
 fn log(msg: &str) {
@@ -11,10 +14,55 @@ fn log(msg: &str) {
     }
 }
 
+// 弹窗结果回调类型
+type DialogResultCallback = Box<dyn FnOnce(String) + Send + 'static>;
+
+// 全局存储弹窗回调
+lazy_static! {
+    static ref DIALOG_CALLBACKS: Mutex<Vec<(String, DialogResultCallback)>> = Mutex::new(Vec::new());
+}
+
 // 处理前端按钮点击事件的命令
 #[tauri::command]
-pub fn handle_button_click(button_text: String) {
-    log(&format!("前端按钮被按下: {}", button_text));
+pub fn handle_button_click(button_text: String, dialog_id: Option<String>) {
+    // log(&format!("前端按钮被按下: {}", button_text));
+    
+    // 如果有dialog_id，尝试找到对应的回调并执行
+    if let Some(dialog_id) = dialog_id {
+        let mut callbacks = DIALOG_CALLBACKS.lock().unwrap();
+        if let Some(index) = callbacks.iter().position(|(id, _)| id == &dialog_id) {
+            let (_, callback) = callbacks.remove(index);
+            callback(button_text);
+        }
+    }
+}
+
+/// 显示弹窗并等待用户点击结果
+/// - `app_handle`: Tauri应用句柄
+/// - `message`: 弹窗显示的消息内容
+/// - `buttons`: 按钮配置数组
+/// - `callback`: 用户点击按钮后的回调函数，参数为按钮文本
+pub fn show_dialog<F>(app_handle: AppHandle, message: String, buttons: Vec<serde_json::Value>, callback: F)
+where
+    F: FnOnce(String) + Send + 'static,
+{
+    // 生成唯一的dialog_id
+    let dialog_id = Uuid::new_v4().to_string();
+    
+    // 存储回调
+    DIALOG_CALLBACKS.lock().unwrap().push((dialog_id.clone(), Box::new(callback)));
+    
+    // 推送弹窗事件
+    if let Err(e) = app_handle.emit("show-dialog", serde_json::json!({
+        "message": message,
+        "buttons": buttons,
+        "dialog_id": dialog_id
+    })) {
+        log(&format!("推送弹窗失败: {}", e));
+        // 清理回调
+        let mut callbacks = DIALOG_CALLBACKS.lock().unwrap();
+        callbacks.retain(|(id, _)| id != &dialog_id);
+    }
 }
 
 pub fn spawn_dialog_test_task(app_handle: AppHandle) {
@@ -27,15 +75,12 @@ pub fn spawn_dialog_test_task(app_handle: AppHandle) {
         log("推送测试弹窗...");
         
         // 推送测试弹窗信息
-        if let Err(e) = app_handle.emit("show-dialog", serde_json::json!({
-            "message": "这是来自后端的测试弹窗消息\n支持多行文本\n可以显示各种提示信息",
-            "buttons": [
-                { "text": "确定", "isPrimary": true },
-                { "text": "取消" }
-            ]
-        })) {
-            log(&format!("弹窗测试任务推送弹窗失败: {}", e));
-        }
+        show_dialog(app_handle.clone(), "这是来自后端的测试弹窗消息\n支持多行文本\n可以显示各种提示信息".to_string(), vec![
+            serde_json::json!({ "text": "确定", "isPrimary": true }),
+            serde_json::json!({ "text": "取消" })
+        ], |result| {
+            log(&format!("用户点击了按钮: {}", result));
+        });
         
         // 延迟5秒后关闭第一个弹窗
         std::thread::sleep(std::time::Duration::from_secs(5));
@@ -52,14 +97,11 @@ pub fn spawn_dialog_test_task(app_handle: AppHandle) {
         log("推送第二个测试弹窗...");
         
         // 推送第二个测试弹窗信息
-        if let Err(e) = app_handle.emit("show-dialog", serde_json::json!({
-            "message": "这是另一个测试弹窗，只有一个按钮",
-            "buttons": [
-                { "text": "OK" }
-            ]
-        })) {
-            log(&format!("弹窗测试任务推送第二个弹窗失败: {}", e));
-        }
+        show_dialog(app_handle.clone(), "这是另一个测试弹窗，只有一个按钮".to_string(), vec![
+            serde_json::json!({ "text": "OK" })
+        ], |result| {
+            log(&format!("用户点击了按钮: {}", result));
+        });
         
         log("弹窗测试任务完成");
     });

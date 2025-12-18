@@ -32,7 +32,7 @@ const OVERTIME_COMMAND_SHORT: u64 = 1000;    // 短命令超时时间:1秒
 
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = true;
+const LOG_ENABLE: bool = false;
 
 // 自定义日志函数
 fn log(msg: &str) {
