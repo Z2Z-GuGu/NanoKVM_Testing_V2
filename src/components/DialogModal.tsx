@@ -89,7 +89,7 @@ export function DialogModal({ isDark }: DialogModalProps) {
     console.log('DialogModal: 开始监听后端弹窗事件...');
     
     // 直接监听弹窗事件，与Sidebar组件保持一致的实现方式
-    listen('show-dialog', (event) => {
+    const unlistenShow = listen('show-dialog', (event) => {
       console.log('DialogModal: 接收到弹窗事件:', event);
       console.log('DialogModal: 事件负载:', event.payload);
       
@@ -115,9 +115,29 @@ export function DialogModal({ isDark }: DialogModalProps) {
       console.error('DialogModal: 设置弹窗事件监听器失败:', error);
     });
     
+    
+    // 监听关闭弹窗事件
+    const unlistenHide = listen('hide-dialog', (event) => {
+      console.log('DialogModal: 接收到关闭弹窗事件:', event);
+      console.log('DialogModal: 事件负载:', event.payload);
+      
+      try {
+        // 关闭弹窗
+        handleClose();
+        console.log('DialogModal: 弹窗已关闭');
+      } catch (parseError) {
+        console.error('DialogModal: 处理关闭弹窗事件失败:', parseError);
+      }
+    }).catch(error => {
+      console.error('DialogModal: 设置关闭弹窗事件监听器失败:', error);
+    });
+
     // 清理函数
     return () => {
       console.log('DialogModal: 清理事件监听器');
+      // 清理监听器
+      if (unlistenShow) unlistenShow.then(unlisten => unlisten());
+      if (unlistenHide) unlistenHide.then(unlisten => unlisten());
     };
   }, []);
 

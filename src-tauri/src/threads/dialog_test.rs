@@ -27,8 +27,17 @@ pub fn spawn_dialog_test_task(app_handle: AppHandle) {
             eprintln!("弹窗测试任务推送弹窗失败: {}", e);
         }
         
-        // 延迟5秒后推送另一个测试弹窗
+        // 延迟5秒后关闭第一个弹窗
         std::thread::sleep(std::time::Duration::from_secs(5));
+        
+        println!("关闭第一个测试弹窗...");
+        // 推送关闭弹窗事件
+        if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
+            eprintln!("弹窗测试任务关闭弹窗失败: {}", e);
+        }
+        
+        // 等待2秒后推送第二个测试弹窗
+        std::thread::sleep(std::time::Duration::from_secs(2));
 
         println!("推送第二个测试弹窗...");
         
