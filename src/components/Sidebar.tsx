@@ -14,12 +14,12 @@ export function Sidebar({
   isDark
 }: SidebarProps) {
   const [currentTime, setCurrentTime] = useState('');
-  const [machineCode, setMachineCode] = useState('1');
+  const [machineCode, setMachineCode] = useState('-');
   const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
-  const [uploadCount, setUploadCount] = useState(32);
-  const [currentDevice, setCurrentDevice] = useState('Desk-A');
-  const [serialNumber, setSerialNumber] = useState('Neal0015B');
-  const [targetIP, setTargetIP] = useState('192.168.222.222');
+  const [uploadCount, setUploadCount] = useState(0);
+  const [currentDevice, setCurrentDevice] = useState('-');
+  const [serialNumber, setSerialNumber] = useState('-');
+  const [targetIP, setTargetIP] = useState('-');
 
   useEffect(() => {
     const updateTime = () => {

@@ -497,6 +497,12 @@ async fn serial_data_management_task() {
     }
 }
 
+// 检测USB工具是否已经连接
+pub async fn is_usb_tool_connected() -> bool {
+    let status = USB_TOOL_STATUS.lock().await;
+    *status == UsbToolStatus::Connected || *status == UsbToolStatus::ConnectKVM
+}
+
 // 串口任务线程函数
 pub fn spawn_serial_task() {
     spawn(async move {

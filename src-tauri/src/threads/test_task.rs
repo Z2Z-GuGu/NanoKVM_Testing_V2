@@ -24,9 +24,9 @@ pub fn spawn_test_task(app_handle: AppHandle) {
         log("推送初始测试数据...");
         
         // 推送测试数据
-        if let Err(e) = app_handle.emit("machine-code-update", "1") {
-            log(&format!("测试任务推送机器编码失败: {}", e));
-        }
+        // if let Err(e) = app_handle.emit("machine-code-update", "3") {
+        //     log(&format!("测试任务推送机器编码失败: {}", e));
+        // }
         if let Err(e) = app_handle.emit("server-status-update", "online") {
             log(&format!("测试任务推送服务器状态失败: {}", e));
         }

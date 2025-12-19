@@ -9,6 +9,22 @@ use nokhwa::{
 use nokhwa::pixel_format::RgbFormat;
 use std::thread;
 use std::time::Duration;
+use lazy_static::lazy_static;
+use tokio::sync::Mutex;
+use tokio;
+
+// 摄像头状态枚举
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CameraStatus {
+    Disconnected,    // 未连接
+    Connected,       // 已连接
+    HasImage        // 有画面
+}
+
+// 全局摄像头状态变量
+lazy_static! {
+    static ref CAMERA_STATUS: Mutex<CameraStatus> = Mutex::new(CameraStatus::Disconnected);
+}
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = false;
@@ -52,18 +68,27 @@ pub fn spawn_camera_task() {
         
         let mut camera: Option<Camera> = None;
         let camera_index = CameraIndex::Index(0);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
         
         // 主循环
         loop {
             // 检查摄像头是否连接
             if camera.is_none() {
                 log("等待摄像头连接...");
+                runtime.block_on(async {
+                    let mut status = CAMERA_STATUS.lock().await;
+                    *status = CameraStatus::Disconnected;
+                });
                 
                 // 尝试连接摄像头
                 match Camera::new(camera_index.clone(), RequestedFormat::new::<RgbFormat>(RequestedFormatType::HighestFrameRate(30))) {
                     Ok(cam) => {
                         log("摄像头已连接！");
                         camera = Some(cam);
+                        runtime.block_on(async {
+                            let mut status = CAMERA_STATUS.lock().await;
+                            *status = CameraStatus::Connected;
+                        });
                     },
                     Err(_) => {
                         log("摄像头未连接，等待1秒后重试...");
@@ -84,12 +109,24 @@ pub fn spawn_camera_task() {
                                 let is_black = is_image_black(&image_data);
                                 if is_black {
                                     log("警告: 捕捉到的图像是全黑的！");
+                                    runtime.block_on(async {
+                                        let mut status = CAMERA_STATUS.lock().await;
+                                        *status = CameraStatus::Connected;
+                                    });
                                 } else {
                                     log("图像正常，不是全黑的");
+                                    runtime.block_on(async {
+                                        let mut status = CAMERA_STATUS.lock().await;
+                                        *status = CameraStatus::HasImage;
+                                    });
                                 }
                             },
                             Err(_) => {
                                 log("图像解码失败！");
+                                runtime.block_on(async {
+                                    let mut status = CAMERA_STATUS.lock().await;
+                                    *status = CameraStatus::Connected;
+                                });
                             }
                         }
                         
@@ -99,6 +136,10 @@ pub fn spawn_camera_task() {
                     Err(_) => {
                         log("摄像头连接断开！");
                         camera = None;
+                        runtime.block_on(async {
+                            let mut status = CAMERA_STATUS.lock().await;
+                            *status = CameraStatus::Disconnected;
+                        });
                         // 等待1秒后尝试重新连接
                         thread::sleep(Duration::from_secs(1));
                     }
@@ -106,4 +147,10 @@ pub fn spawn_camera_task() {
             }
         }
     });
+}
+
+// 获取当前摄像头状态（供其他线程调用）
+pub async fn get_camera_status() -> CameraStatus {
+    let status = CAMERA_STATUS.lock().await;
+    *status
 }

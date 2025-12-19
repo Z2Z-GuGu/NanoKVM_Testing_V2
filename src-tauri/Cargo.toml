@@ -36,4 +36,7 @@ nusb = "0.1"
 rand = "0.8"
 strip-ansi-escapes = "0.2"
 uuid = { version = "1.19.0", features = ["v4"] }
+chrono = "0.4"  # 可选，用于更好的时间格式化
+whoami = "1.4"  # 可选，用于获取用户名
+toml = "0.8"    # 用于TOML文件解析
 

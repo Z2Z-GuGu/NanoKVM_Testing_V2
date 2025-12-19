@@ -609,6 +609,10 @@ fn print_image(img: &ImageBuffer<Rgb<u8>, Vec<u8>>, printer_name: Option<&str>) 
     }
 }
 
+pub async fn is_printer_connected() -> bool {
+    printer_exists(TARGET_PRINTER)
+}
+
 pub fn spawn_printer_task() {
     thread::spawn(move || {
         // 测试打印功能
