@@ -37,24 +37,30 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 std::process::exit(1);
             }
         }
-            // pub board_version: String,
-            // pub desktop_mode: String,
-            // pub eth_mod: String,
-            // pub eth_up_speed: u32,
-            // pub eth_down_speed: u32,
-            // pub wifi_up_speed: u32,
-            // pub wifi_down_speed: u32,
-            
         // 延迟2秒后推送初始测试数据，确保前端已经准备好
         std::thread::sleep(std::time::Duration::from_secs(2));
+
+        // 检测配置文件夹
+        let mut config_warning_msg = String::new();
         // 检查机器编号并推送显示
         let machine_number = save::get_config_str("application", "machine_number");
         if  machine_number.is_none() || 
-            machine_number.as_ref().map(|n| n == "0").unwrap_or(false) || 
-            machine_number.as_ref().map(|n| n.is_empty()).unwrap_or(false) {
+            machine_number.as_ref().map(|n| n.is_empty()).unwrap_or(false) || 
+            !machine_number.as_ref().map(|n| n.chars().all(|c| c.is_ascii_digit() && c >= '1' && c <= '9')).unwrap_or(false) {
             log("机器编号错误，弹窗提示修改，点击确认关闭程序");
-            
-            show_dialog(app_handle.clone(), format!("检测到机器编号错误，请编辑以下文件[application]中的machine_number：\n\"C:/Users/{}/AppData/Local/NanoKVM-Testing/config/config.toml\"", std::env::var("USERNAME").unwrap()), vec![
+            config_warning_msg.push_str(&format!("⚠️ 机器编号错误，请编辑以下文件[application]中的machine_number：\n\"C:/Users/{}/AppData/Local/NanoKVM-Testing/config/config.toml\"\n", std::env::var("USERNAME").unwrap()));
+        }
+        // 检测是否存在APP测试文件
+        if save::is_app_folder_empty() {
+            config_warning_msg.push_str(&format!("⚠️ 测试数据文件夹为空，请在下面的位置存放产测软件：\n\"C:/Users/{}/AppData/Local/NanoKVM-Testing/app\"\n", std::env::var("USERNAME").unwrap()));
+        }
+        
+        // 如果有问题就弹窗提示
+        if config_warning_msg.is_empty() {
+            log("配置文件检查通过");
+        } else {
+            log(&config_warning_msg);
+            show_dialog(app_handle.clone(), format!("{}", config_warning_msg), vec![
                 serde_json::json!({ "text": "确定" })
             ], move |result| {
                 log(&format!("用户点击了按钮: {}", result));
@@ -66,6 +72,8 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 thread::sleep(Duration::from_millis(100));
             }
         }
+
+        // 推送机器编号到前端
         if let Some(number) = &machine_number {
             log(&format!("机器编号: {}", number));
             if let Err(e) = app_handle.emit("machine-code-update", number) {

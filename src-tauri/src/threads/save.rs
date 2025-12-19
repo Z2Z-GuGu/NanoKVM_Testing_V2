@@ -141,6 +141,7 @@ fn create_directory_structure(app_root: &Path, app_name: &str) -> Result<(), Box
         app_root.join("config"),
         app_root.join("data").join("unuploaded"),
         app_root.join("data").join("save"),
+        app_root.join("app"),
     ];
     
     println!("\n📂 正在创建目录结构:");
@@ -466,6 +467,44 @@ pub fn set_test_status(serial: &str, item: &str, status: &str) -> Result<(), Box
     fs::write(&json_path, json_content)?;
     
     Ok(())
+}
+
+/// 检测应用程序根目录下的app文件夹是否为空或不存在
+/// 
+/// # 返回
+/// - `false` 如果app文件夹存在且不为空
+/// - `true` 如果app文件夹不存在或为空
+pub fn is_app_folder_empty() -> bool {
+    // 获取应用程序根路径
+    let root_path = match get_app_root() {
+        Ok(path) => path,
+        Err(_) => return true,
+    };
+    
+    // 构建app文件夹路径
+    let app_folder_path = root_path.join("app");
+    
+    // 检查文件夹是否存在
+    if !app_folder_path.exists() {
+        return true;
+    }
+    
+    // 检查是否为文件夹
+    if !app_folder_path.is_dir() {
+        return true;
+    }
+    
+    // 读取文件夹内容
+    match fs::read_dir(&app_folder_path) {
+        Ok(entries) => {
+            // 检查是否有任何文件或子文件夹
+            entries.count() == 0
+        }
+        Err(_) => {
+            // 读取失败，视为空文件夹
+            true
+        }
+    }
 }
 
 /// 获取测试状态
