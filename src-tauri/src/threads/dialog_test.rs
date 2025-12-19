@@ -1,8 +1,8 @@
 use std::thread;
-use std::sync::{Arc, Mutex};
+use std::sync::{Mutex, mpsc};
 use lazy_static::lazy_static;
 use uuid::Uuid;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = false;
@@ -65,6 +65,46 @@ where
     }
 }
 
+/// 显示弹窗并等待用户选择，返回用户选择的按钮文本
+/// - `app_handle`: Tauri应用句柄
+/// - `message`: 弹窗显示的消息内容
+/// - `buttons`: 按钮配置数组
+/// - 返回值: 用户选择的按钮文本
+pub fn show_dialog_and_wait(app_handle: AppHandle, message: String, buttons: Vec<serde_json::Value>) -> String {
+    // 创建通道用于接收用户选择结果
+    let (tx, rx) = mpsc::channel();
+    
+    // 生成唯一的dialog_id
+    let dialog_id = Uuid::new_v4().to_string();
+    
+    // 存储回调，当用户点击按钮时通过通道发送结果
+    DIALOG_CALLBACKS.lock().unwrap().push((dialog_id.clone(), Box::new(move |result| {
+        let _ = tx.send(result);
+    })));
+    
+    // 推送弹窗事件
+    if let Err(e) = app_handle.emit("show-dialog", serde_json::json!({
+        "message": message,
+        "buttons": buttons,
+        "dialog_id": dialog_id
+    })) {
+        log(&format!("推送弹窗失败: {}", e));
+        // 清理回调
+        let mut callbacks = DIALOG_CALLBACKS.lock().unwrap();
+        callbacks.retain(|(id, _)| id != &dialog_id);
+        return "取消".to_string(); // 返回默认值
+    }
+    
+    // 阻塞等待用户选择结果
+    match rx.recv() {
+        Ok(result) => result,
+        Err(_) => {
+            log("等待用户选择时发生错误");
+            "取消".to_string() // 返回默认值
+        }
+    }
+}
+
 pub fn spawn_dialog_test_task(app_handle: AppHandle) {
     thread::spawn(move || {
         log("弹窗测试任务线程已启动");
@@ -101,10 +141,10 @@ pub fn spawn_dialog_test_task(app_handle: AppHandle) {
             serde_json::json!({ "text": "OK" })
         ], |result| {
             log(&format!("用户点击了按钮: {}", result));
-        });
-        
-        log("弹窗测试任务完成");
     });
     
-    log("弹窗测试任务线程创建完成");
+    log("弹窗测试任务完成");
+});
+
+log("弹窗测试任务线程创建完成");
 }

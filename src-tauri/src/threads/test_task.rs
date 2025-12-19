@@ -3,7 +3,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = false;
+const LOG_ENABLE: bool = true;
 
 // 自定义日志函数
 fn log(msg: &str) {
@@ -17,9 +17,6 @@ pub fn spawn_test_task(app_handle: AppHandle) {
         log("测试任务线程已启动");
         
         let mut status_toggle = false;
-
-        // 延迟2秒后推送初始测试数据，确保前端已经准备好
-        std::thread::sleep(std::time::Duration::from_secs(2));
 
         log("推送初始测试数据...");
         

@@ -1,15 +1,16 @@
 use std::thread;
 use std::time::Duration;
-use crate::threads::save;
-use crate::threads::serial::is_usb_tool_connected;
+use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty};
+use crate::threads::serial::{is_usb_tool_connected, serial_data_management_task};
 use crate::threads::printer::is_printer_connected;
 use crate::threads::camera::{get_camera_status, CameraStatus};
-use crate::threads::dialog_test::show_dialog;
+use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
+use crate::threads::test_task::spawn_test_task;
 use tauri::{AppHandle, Emitter};
 use tokio;
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = true;
+const LOG_ENABLE: bool = false;
 
 // 自定义日志函数
 fn log(msg: &str) {
@@ -23,7 +24,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         log("初始化线程已启动");
         
         let app_name = "NanoKVM-Testing";
-        match save::init_appdata(app_name) {
+        match init_appdata(app_name) {
             Ok(root_path) => {
                 if root_path.exists() {
                     log("应用程序目录初始化成功");
@@ -43,7 +44,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         // 检测配置文件夹
         let mut config_warning_msg = String::new();
         // 检查机器编号并推送显示
-        let machine_number = save::get_config_str("application", "machine_number");
+        let machine_number = get_config_str("application", "machine_number");
         if  machine_number.is_none() || 
             machine_number.as_ref().map(|n| n.is_empty()).unwrap_or(false) || 
             !machine_number.as_ref().map(|n| n.chars().all(|c| c.is_ascii_digit() && c >= '1' && c <= '9')).unwrap_or(false) {
@@ -51,7 +52,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             config_warning_msg.push_str(&format!("⚠️ 机器编号错误，请编辑以下文件[application]中的machine_number：\n\"C:/Users/{}/AppData/Local/NanoKVM-Testing/config/config.toml\"\n", std::env::var("USERNAME").unwrap()));
         }
         // 检测是否存在APP测试文件
-        if save::is_app_folder_empty() {
+        if is_app_folder_empty() {
             config_warning_msg.push_str(&format!("⚠️ 测试数据文件夹为空，请在下面的位置存放产测软件：\n\"C:/Users/{}/AppData/Local/NanoKVM-Testing/app\"\n", std::env::var("USERNAME").unwrap()));
         }
         
@@ -81,11 +82,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             }
         }
 
-        // let board_version = save::get_config_str("testing", "board_version");
-        // if let Some(version) = &board_version {
-        //     log(&format!("板卡版本: {}", version));
-        // }
-        
+        // 循环检测USB工具、打印机、摄像头是否连接
         loop{
             // 在普通线程中执行异步函数
             let mut warning_msg = String::new();
@@ -114,39 +111,50 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             }
 
             if !warning_msg.is_empty() {
-                use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-                let ret = Arc::new(AtomicBool::new(false));
-                let ret_clone = Arc::clone(&ret);
-                
-                show_dialog(app_handle.clone(), warning_msg.to_string(), vec![
+                let ret = show_dialog_and_wait(app_handle.clone(), warning_msg.to_string(), vec![
                     serde_json::json!({ "text": "重新检测" })
-                ], move |result| {
-                    log(&format!("用户点击了按钮: {}", result));
-                    if result == "重新检测" {
-                        ret_clone.store(true, Ordering::SeqCst);
-                    }
-                });
+                ]);
+                if ret == "重新检测" {
+                    // 等待弹窗关闭动画500ms
+                    thread::sleep(Duration::from_millis(500));
+                    continue;
+                }
+                // use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+                // let ret = Arc::new(AtomicBool::new(false));
+                // let ret_clone = Arc::clone(&ret);
                 
-                while !ret.load(Ordering::SeqCst) {
-                    // 100ms 检查一次
-                    thread::sleep(Duration::from_millis(100));
-                }
+                // show_dialog(app_handle.clone(), warning_msg.to_string(), vec![
+                //     serde_json::json!({ "text": "重新检测" })
+                // ], move |result| {
+                //     log(&format!("用户点击了按钮: {}", result));
+                //     if result == "重新检测" {
+                //         ret_clone.store(true, Ordering::SeqCst);
+                //     }
+                // });
+                
+                // while !ret.load(Ordering::SeqCst) {
+                //     // 100ms 检查一次
+                //     thread::sleep(Duration::from_millis(100));
+                // }
 
-                // 推送关闭弹窗事件
-                if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
-                    log(&format!("弹窗测试任务关闭弹窗失败: {}", e));
-                }
-                // 等待弹窗关闭动画500ms
-                thread::sleep(Duration::from_millis(500));
+                // // 推送关闭弹窗事件
+                // if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
+                //     log(&format!("弹窗测试任务关闭弹窗失败: {}", e));
+                // }
+                // // 等待弹窗关闭动画500ms
+                // thread::sleep(Duration::from_millis(500));
             } else {
                 log("所有测试工具均已连接");
                 break;
             }
         }
+        
+        // 启动测试任务线程后直接退出线程
+        spawn_test_task(app_handle.clone());
 
-        loop {
-            // 每秒切换一次
-            thread::sleep(Duration::from_secs(1));
-        }
+        // 启动串口数据管理线程
+        serial_data_management_task(app_handle.clone());
+
+        log("测试任务线程已启动，退出初始化线程");
     });
 }
