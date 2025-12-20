@@ -24,7 +24,7 @@ const DEFAULT_USERNAME: &str = "root";
 const DEFAULT_PASSWORD: &str = "sipeed";
 
 // 超时时间
-const OVERTIME_LOGIN: u64 = 60000;      // 登录超时时间:60秒
+const OVERTIME_LOGIN: u64 = 20000;      // 登录超时时间:60秒
 const OVERTIME_PASSWORD: u64 = 5000;    // 密码超时时间:5秒
 const OVERTIME_LOGIN_SUCCESS: u64 = 10000;    // 登录成功超时时间:10秒
 const OVERTIME_COMMAND: u64 = 2000;    // 普通命令超时时间:2秒
@@ -33,7 +33,7 @@ const OVERTIME_CONNECTED: u64 = 10000;    // 最长容忍的Connected时间：10
 const OVERTIME_ENTERED: u64 = 3000;    // 检测不到后发送回车时间：3s
 
 
-const DISCONNECT_COUNT_THRESHOLD: u32 = 3; // 检测不到USB工具3次后触发弹窗
+const DISCONNECT_COUNT_THRESHOLD: u32 = 4; // 检测不到USB工具3次后触发弹窗
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
