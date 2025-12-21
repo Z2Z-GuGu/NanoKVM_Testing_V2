@@ -1,7 +1,7 @@
 use std::thread;
 use std::time::Duration;
 use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty};
-use crate::threads::serial::{is_usb_tool_connected, serial_data_management_task};
+use crate::threads::serial::{is_usb_tool_connected};
 use crate::threads::printer::is_printer_connected;
 use crate::threads::camera::{get_camera_status, CameraStatus};
 use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
@@ -152,8 +152,6 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         // 启动测试任务线程后直接退出线程
         spawn_test_task(app_handle.clone());
 
-        // 启动串口数据管理线程
-        serial_data_management_task(app_handle.clone());
 
         log("测试任务线程已启动，退出初始化线程");
     });

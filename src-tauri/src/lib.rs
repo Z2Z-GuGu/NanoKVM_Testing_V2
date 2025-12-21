@@ -13,6 +13,9 @@ pub fn run() {
             threads::setup::spawn_setup_task(app.handle().clone());
             // 启动串口功能线程
             threads::serial::serial_management_task();
+            
+            // 启动串口数据管理线程
+            threads::serial::serial_data_management_task(app.handle().clone());
             // 启动摄像头功能线程
             threads::camera::spawn_camera_task();
             // 启动打印机功能线程
