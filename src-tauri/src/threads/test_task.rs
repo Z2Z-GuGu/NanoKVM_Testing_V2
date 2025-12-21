@@ -11,7 +11,7 @@ fn log(msg: &str) {
         println!("[test_task]{}", msg);
     }
 }
-        
+
 pub fn spawn_test_task(app_handle: AppHandle) {
     thread::spawn(move || {
         log("测试任务线程已启动");

@@ -5,12 +5,13 @@ use crate::threads::serial::{is_usb_tool_connected};
 use crate::threads::printer::is_printer_connected;
 use crate::threads::camera::{get_camera_status, CameraStatus};
 use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
-use crate::threads::test_task::spawn_test_task;
+// use crate::threads::test_task::spawn_test_task;
 use tauri::{AppHandle, Emitter};
 use tokio;
+use crate::threads::app::spawn_app_step1_task;
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = false;
+const LOG_ENABLE: bool = true;
 
 // 自定义日志函数
 fn log(msg: &str) {
@@ -148,10 +149,13 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 break;
             }
         }
-        
+        // serial_data_management_task(app_handle.clone());
+        spawn_app_step1_task(app_handle.clone());
         // 启动测试任务线程后直接退出线程
-        spawn_test_task(app_handle.clone());
-
+        // spawn_test_task(app_handle.clone());
+        // spawn_app_step1_task(app_handle.clone());
+        // let runtime = tokio::runtime::Runtime::new().unwrap();
+        // runtime.spawn(spawn_app_step1_task(app_handle.clone()));
 
         log("测试任务线程已启动，退出初始化线程");
     });
