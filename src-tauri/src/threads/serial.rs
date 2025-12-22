@@ -25,7 +25,7 @@ const DEFAULT_USERNAME: &str = "root";
 const DEFAULT_PASSWORD: &str = "sipeed";
 
 
-const MAX_UPDATE_CONNECT_ERR_COUNT: u32 = 2;        // 最大连接错误次数，超过则认为连接失败
+const MAX_UPDATE_CONNECT_ERR_COUNT: u32 = 10;        // 最大连接错误次数，超过则认为连接失败
 const MAX_CONNECT_DETECTE_DUTY_MS: u64 = 500;       // 检测周期500ms
 const MAX_RECEIVE_DATA_TIMEOUT_MS: u64 = 100;       // 最大接收数据超时时间100ms
 const FILTER_WINDOW_SIZE: usize = 10;                // 滑动滤波器窗口大小（时间=5*MAX_RECEIVE_DATA_TIMEOUT_MS）
@@ -253,7 +253,7 @@ pub fn serial_management_task() {
                                 Ok(_) => {},
                                 Err(crate::threads::serial::mpsc::error::TrySendError::Full(data)) => {
                                     log("队列已满，丢弃最早数据");
-                                    // 不再调用serial_receive()，避免移除队列
+                                    _ = serial_receive().await;
                                     // 直接重试发送当前数据
                                     let _ = receive_queue_tx.try_send(data);
                                 },
@@ -321,17 +321,36 @@ pub async fn execute_command_and_wait(command: &str, ret_str: &str, timeout_ms: 
     return true;
 }
 
-// 检测接收到的数据中是否包含一个列表中的字符串，如果包含回复匹配的字符串，不包含回复”UNMATCHED“，如果无数据回复”NO-DATA“
-pub async fn detect_serial_string(patterns: &[&str], timeout_ms: u64) -> String {
+pub async fn execute_command_and_wait_new(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
+    serial_send(command).await;
+    let result = detect_serial_string(&[ret_str], timeout_ms, 0).await;
+    log(&format!("detect_serial_string result: {:?}", result));
+    
+    result == ret_str
+}
+
+// 检测接收到的数据中是否包含一个列表中的字符串，如果包含回复匹配的字符串，不包含回复”UNMATCHED“，如果无数据回复”NO-DATA“，如果过程中数据密度过低则返回”LOW-DENSITY“
+// 对于这个函数遇到一个问题：登录期间较长比如给定的30s，如果期间断开KVM连接（无数据/数据密度过低），或断开工具连接需要直接返回一定的数值，而不是硬等（可能需要数据密度做判别了）
+pub async fn detect_serial_string(patterns: &[&str], timeout_ms: u64, min_density: u32) -> String {
+    // log(&format!("detect_serial_string timeout_ms: {}", timeout_ms));
     let timeout_time = Instant::now() + Duration::from_millis(timeout_ms);
     let mut has_data = false;
     
     loop {
-        log("等待串口数据");
+        // log("判断数据密度");
+        if min_density != 0 {
+            let density = get_current_data_density().await;
+            if density < min_density {
+                // log(&format!("当前数据密度: {:?}", density));
+                return "LOW-DENSITY".to_string();
+            }
+        }
+        // log("等待串口数据");
         let received = serial_receive_clean().await;
-        
         if !received.is_empty() {
             has_data = true;
+
+            log(&format!("当前串口数据: {:?}", received));
             
             // 检查所有匹配模式
             for pattern in patterns {
@@ -342,7 +361,7 @@ pub async fn detect_serial_string(patterns: &[&str], timeout_ms: u64) -> String 
         }
         
         // 检查超时
-        log(&format!("等待串口数据超时剩余时间: {:?}", timeout_time - Instant::now()));
+        // log(&format!("等待串口数据超时剩余时间: {:?}", timeout_time - Instant::now()));
         if Instant::now() >= timeout_time {
             if !has_data {
                 return "NO-DATA".to_string();
@@ -351,49 +370,11 @@ pub async fn detect_serial_string(patterns: &[&str], timeout_ms: u64) -> String 
             }
         }
         
-        // // 优化：增加休眠时间，减少锁竞争
-        // // 根据剩余超时时间动态调整休眠时间
-        // let remaining_time = (timeout_time - Instant::now()).as_millis() as u64;
-        // let sleep_time = if remaining_time > 1000 {
-        //     500 // 长时间等待时，休眠500ms
-        // } else if remaining_time > 500 {
-        //     200 // 中等时间等待时，休眠200ms
-        // } else {
-        //     100 // 短时间等待时，休眠100ms
-        // };
-        
-        // log(&format!("sleep {}ms", sleep_time));
-        
         // 使用同步休眠，避免异步调度问题
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(10));
     }
 }
 
-// 使用示例
-// async fn example_usage() {
-//     let patterns = ["login", ":~#", "AXERA-UBOOT=>"];
-//     
-//     let result = detect_serial_string(&patterns, 5000).await;
-//     log(&format!("检测结果: {}", result));
-// }
-
-// // 串口数据管理线程
-// pub fn serial_data_management_task(_app_handle: AppHandle) {
-//     spawn(async move {
-//         loop {
-//             // if *USB_TOOL_CONNECTED.lock().await {
-//             //     // 打印接收数据
-//             //     let received_data = serial_receive_clean().await;
-//             //     // if *DATA_DENSITY.lock().await > 0 {
-//             //     if !received_data.is_empty() {
-//             //         log(&format!("接收数据: {:?}", received_data));
-//             //     }
-//             // }
-//             // 短暂休眠，避免CPU占用过高
-//             sleep(Duration::from_millis(10)).await;
-//         }
-//     });
-// }
 
 // 检测USB工具是否已经连接
 pub async fn is_usb_tool_connected() -> bool {

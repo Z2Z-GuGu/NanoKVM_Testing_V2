@@ -124,3 +124,41 @@
 + 单个弹窗使用一个进程管理，避免重复触发
 + 可以设置的按键数量+内容：0、1、2
 + 可以设置的弹窗信息
+
+
+
+### 一些问题
+
++ 发现原来的ping命令有问题，不能检测time，有一次log如下：
+
+  ```shell
+  ping -c 1 172.168.100.1
+  From 172.168.100.2 icmp_seq=1 Destination Host Unreachable
+  
+  --- 172.168.100.1 ping statistics ---
+  1 packets transmitted, 0 received, +1 errors, 100% packet loss, time 0ms
+  ```
+
++ 正常的是这样的：
+
+  ```
+  ping -c 1 172.168.100.1
+  PING 172.168.100.1 (172.168.100.1) 56(84) bytes of data.
+  64 bytes from 172.168.100.1: icmp_seq=1 ttl=128 time=1.63 ms
+  
+  --- 172.168.100.1 ping statistics ---
+  1 packets transmitted, 1 received, 0% packet loss, time 0ms
+  rtt min/avg/max/mdev = 1.632/1.632/1.632/0.000 ms
+  ```
+
++ 或者未连接一般是这样的：
+
+  ```
+  ping -c 1 172.168.100.1
+  ping: connect: Network is unreachable
+  
+  # 或者其他样式
+  # 未连接线缆时可能卡死，需要ctrl+c退出
+  ```
+
++ 用`1 received`做判别吧
