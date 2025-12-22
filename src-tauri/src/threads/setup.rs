@@ -9,6 +9,7 @@ use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
 use tauri::{AppHandle, Emitter};
 use tokio;
 use crate::threads::app::spawn_app_step1_task;
+use crate::threads::update_state::{set_server_state};
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -156,6 +157,9 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         // spawn_app_step1_task(app_handle.clone());
         // let runtime = tokio::runtime::Runtime::new().unwrap();
         // runtime.spawn(spawn_app_step1_task(app_handle.clone()));
+        
+        // 设置前端服务器状态为true
+        set_server_state(app_handle.clone(), true);
 
         log("测试任务线程已启动，退出初始化线程");
     });

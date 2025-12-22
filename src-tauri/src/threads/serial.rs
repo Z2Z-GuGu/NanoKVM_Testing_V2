@@ -9,8 +9,7 @@ use tokio::time::{sleep, timeout};
 use tauri::async_runtime::spawn;
 use lazy_static::lazy_static;
 use strip_ansi_escapes::strip;
-use tauri::AppHandle;
-use crate::threads::dialog_test::show_dialog_and_wait;
+
 
 // 定义PID/VID和波特率
 const TARGET_VID: u16 = 0x1a86;
@@ -312,7 +311,7 @@ pub async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
 }
 
 // 执行命令并等待完成
-pub async fn execute_command_and_wait(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
+pub async fn execute_command_and_wait_old(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
     serial_send(command).await;
     if ! wait_for_serial_data(ret_str.as_bytes(), timeout_ms).await {
         log(&format!("发送{}超时", command));
@@ -321,7 +320,7 @@ pub async fn execute_command_and_wait(command: &str, ret_str: &str, timeout_ms: 
     return true;
 }
 
-pub async fn execute_command_and_wait_new(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
+pub async fn execute_command_and_wait(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
     serial_send(command).await;
     let result = detect_serial_string(&[ret_str], timeout_ms, 0).await;
     log(&format!("detect_serial_string result: {:?}", result));

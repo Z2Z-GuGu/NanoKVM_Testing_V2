@@ -42,7 +42,7 @@
 
     + 更新产测信息（比如屏幕需要重测）
 + 检测硬件-更新硬件状态（如果两个I2C都没有检测到就弹窗手动选择）
-  + 检测测试保存文件：/etc/testkvm/Neal100BC.json是否存在
+  + 检测测试保存文件：/etc/testkvm/***.json是否存在
     + 如果不存在就开始检测硬件版本+创建新串号+创建新json文件填写基础信息
     + 如果存在则检测底板是否被替换（json串号和底板串号是否一致）
       + 一致/没有串号：弹窗提示是否重新完整检测
@@ -129,6 +129,8 @@
 
 ### 一些问题
 
+#### ping
+
 + 发现原来的ping命令有问题，不能检测time，有一次log如下：
 
   ```shell
@@ -162,3 +164,76 @@
   ```
 
 + 用`1 received`做判别吧
+
+
+#### 检测硬件版本
+
++ Desk
+
+  ```shell
+  root@kvm-0733:~# i2cdetect -ry 7
+  WARNING! This program can confuse your I2C bus, cause data loss and worse!
+  I will probe file /dev/i2c-7 using receive byte commands.
+  I will probe address range 0x08-0x77.
+  Continue? [Y/n] y
+       0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+  00:                         -- -- -- -- -- -- -- --
+  10: -- -- -- -- -- UU -- -- -- -- -- -- -- -- -- --
+  20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  30: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  70: -- -- -- -- -- -- -- --
+  root@kvm-0733:~#
+  ```
+
++ ATX
+
+  ```shell
+  root@kvm-31c6:~# i2cdetect -ry 7
+  WARNING! This program can confuse your I2C bus, cause data loss and worse!
+  I will probe file /dev/i2c-7 using receive byte commands.
+  I will probe address range 0x08-0x77.
+  Continue? [Y/n] y
+       0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+  00:                         -- -- -- -- -- -- -- --
+  10: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  20: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  30: -- -- -- -- -- -- -- -- -- -- -- -- 3c -- -- --
+  40: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  50: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  60: -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  70: -- -- -- -- -- -- -- --
+  root@kvm-31c6:~#
+  ```
+
+#### 如何检测有无wifi
+
++ 无：
+
+  ```shell
+  root@kvm-31c6:~# ip a | grep wlan0
+  root@kvm-31c6:~#
+  ```
+
++ 有
+
+  ```shell
+  root@kvm-0733:~# ip a | grep wlan0
+  6: wlan0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+  root@kvm-0733:~#
+  ```
+
+#### 下载产测步骤
+
++ 检测是否下载了产测文件，如果没有开始下载，如果有，弹窗询问是否覆盖
++ 如何下载？？
+
+#### 检测硬件的步骤
+
++ 不存在测试信息+6911空：新硬件，分配串号后，从零开始
++ 存在测试信息+6911空：维修硬件，弹窗是否从零开始
++ 不存在测试信息+6911有：维修硬件（更新过底板），弹窗是否从零开始
++ 存在测试信息+6911相同：维修硬件（未换底板），弹窗是否从零开始
++ 存在测试信息+6911不同：维修硬件（更换底板），弹窗是否从零开始

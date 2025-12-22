@@ -14,14 +14,15 @@ interface TestButtonStates {
   get_ip: TestButtonStatus;
   detect_hardware: TestButtonStatus;
   download_test: TestButtonStatus;
+  emmc_test: TestButtonStatus;
   uboot: TestButtonStatus;
   kernel: TestButtonStatus;
   app_install: TestButtonStatus;
   hdmi_wait_connection: TestButtonStatus;
+  hdmi_io_test: TestButtonStatus;
   hdmi_loop_test: TestButtonStatus;
   hdmi_capture_test: TestButtonStatus;
-  hdmi_write_edid_1: TestButtonStatus;
-  hdmi_write_edid_2: TestButtonStatus;
+  hdmi_write_edid: TestButtonStatus;
   hdmi_version: TestButtonStatus;
   usb_wait_connection: TestButtonStatus;
   eth_wait_connection: TestButtonStatus;
@@ -47,14 +48,15 @@ export function TestPanel({ isDark }: TestPanelProps) {
     get_ip: 'untested',
     detect_hardware: 'untested',
     download_test: 'untested',
+    emmc_test: 'untested',
     uboot: 'untested',
     kernel: 'untested',
     app_install: 'untested',
     hdmi_wait_connection: 'untested',
+    hdmi_io_test: 'untested',
     hdmi_loop_test: 'untested',
     hdmi_capture_test: 'untested',
-    hdmi_write_edid_1: 'untested',
-    hdmi_write_edid_2: 'untested',
+    hdmi_write_edid: 'untested',
     hdmi_version: 'untested',
     usb_wait_connection: 'untested',
     eth_wait_connection: 'untested',
@@ -110,6 +112,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <TestButton status={buttonStates.get_ip} isDark={isDark}>获取IP</TestButton>
           <TestButton status={buttonStates.detect_hardware} isDark={isDark}>检测硬件</TestButton>
           <TestButton status={buttonStates.download_test} isDark={isDark}>下载产测</TestButton>
+          <TestButton status={buttonStates.emmc_test} isDark={isDark}>eMMC</TestButton>
         </div>
       </section>
 
@@ -135,10 +138,10 @@ export function TestPanel({ isDark }: TestPanelProps) {
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>HDMI接口</span>
           </div>
           <TestButton status={buttonStates.hdmi_wait_connection} isDark={isDark}>等待连接</TestButton>
+          <TestButton status={buttonStates.hdmi_io_test} isDark={isDark}>测试IO</TestButton>
           <TestButton status={buttonStates.hdmi_loop_test} isDark={isDark}>测试环出</TestButton>
           <TestButton status={buttonStates.hdmi_capture_test} isDark={isDark}>测试采集</TestButton>
-          <TestButton status={buttonStates.hdmi_write_edid_1} isDark={isDark}>写EDID</TestButton>
-          <TestButton status={buttonStates.hdmi_write_edid_2} isDark={isDark}>写EDID</TestButton>
+          <TestButton status={buttonStates.hdmi_write_edid} isDark={isDark}>写EDID</TestButton>
           <TestButton status={buttonStates.hdmi_version} isDark={isDark}>Version</TestButton>
         </div>
 

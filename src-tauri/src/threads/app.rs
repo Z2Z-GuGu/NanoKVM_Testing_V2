@@ -4,33 +4,15 @@ use tauri::async_runtime::spawn;
 use tauri::{AppHandle, Emitter};
 use crate::threads::serial::{
     is_usb_tool_connected, get_current_data_density, 
-    serial_send, detect_serial_string, wait_for_serial_data, execute_command_and_wait_new};
+    serial_send, detect_serial_string, wait_for_serial_data, execute_command_and_wait};
 use crate::threads::dialog_test::{show_dialog_and_wait};
 use lazy_static::lazy_static;
+use crate::threads::update_state::{AppStep1Status, AppTestStatus, set_step_status, clean_step1_status, set_target_ip, set_current_hardware};
 
-const DATA_DENSITY_THRESHOLD: u64 = 100;          // 数据密度大小判别
+const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
+const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 
-/*
-    应用步骤1状态全局变量
-    APP_STEP1_STATUS = 0  // 未连接工具
-    APP_STEP1_STATUS = 1  // 已连接工具, 未连接KVM
-    APP_STEP1_STATUS = 2  // 状态不确定
-    APP_STEP1_STATUS = 3  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
-    APP_STEP1_STATUS = 4  // 已连接KVM，开机中
-    APP_STEP1_STATUS = 5  // 已连接KVM，已开机（现在出现login）
-    APP_STEP1_STATUS = 6  // 已连接KVM，已登录（现在出现:~#）
-*/
-// 状态枚举
-#[derive(Debug, PartialEq, Clone)]
-pub enum AppStep1Status {
-    Unconnected     = 0,  // 未连接工具
-    ConnectedNoKVM  = 1,  // 已连接工具, 未连接KVM
-    Uncertain       = 2,  // 状态不确定
-    Booted          = 3,  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
-    Booting         = 4,  // 已连接KVM，开机中
-    BootedLogin     = 5,  // 已连接KVM，已开机（现在出现login）
-    LoggedIn        = 6,  // 已连接KVM，已登录（现在出现:~#）
-}
+// AppStep1Status
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -74,6 +56,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
             match app_step1_status {
                 AppStep1Status::Unconnected => {  // 未连接工具
                     log("未连接工具, 进入检测步骤");
+                    clean_step1_status(app_handle.clone());
                     if !is_usb_tool_connected().await {
                         log("未连接工具, 弹窗重新检测");
                         let _ = show_dialog_and_wait(app_handle.clone(), "⚠️ USB测试工具未连接，请将USB测试工具连接至本机".to_string(), vec![
@@ -89,9 +72,13 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     continue;
                 }
                 AppStep1Status::ConnectedNoKVM => {  // 已连接工具, 未连接KVM
+                    clean_step1_status(app_handle.clone());
+                    set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Testing);
+
                     not_connected_kvm_count += 1;
-                    if not_connected_kvm_count >= 10 {
+                    if not_connected_kvm_count >= NOT_CONNECTED_KVM_COUNT_THRESHOLD {
                         // 未连接KVM超过10次，同步弹窗提示
+                        set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Failed);
                         let _ = show_dialog_and_wait(app_handle.clone(), "⚠️ 未检测到KVM，请检查KVM是否连接至测试工具".to_string(), vec![
                             serde_json::json!({ "text": "再次检测" })
                         ]);
@@ -146,12 +133,16 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                 }
                 AppStep1Status::Booted => {  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
                     log("已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）, 发送boot\n");
+                    set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
+                    set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Testing);
                     serial_send("boot\n").await;
                     std::thread::sleep(Duration::from_millis(100));
                     app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
                 }
                 AppStep1Status::Booting => {  // 已连接KVM，开机中
                     log("已连接KVM，开机中, 等待login...");
+                    set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
+                    set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Testing);
                     let patterns = ["login"];
                     let result = detect_serial_string(&patterns, 30000, 10).await;
                     match result.as_str() {
@@ -176,19 +167,21 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                 }
                 AppStep1Status::BootedLogin => {  // 已连接KVM，已开机（现在出现login）
                     log("已连接KVM，已开机（现在出现login）, 输入root密码");
-                    if ! execute_command_and_wait_new("root\n", "Password", 1000).await {
+                    set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
+                    set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Testing);
+                    if ! execute_command_and_wait("root\n", "Password", 1000).await {
                         app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
                         continue;
                     }
                     log("输入root密码成功, 输入sipeed密码");
-                    if ! execute_command_and_wait_new("sipeed\n", "Welcome", 1000).await {
+                    if ! execute_command_and_wait("sipeed\n", "Welcome", 1000).await {
                         app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
                         continue;
                     }
                     // 等待一部分初始信息
                     std::thread::sleep(Duration::from_millis(100));
                     log("登录成功, 发送回车等待:~#");
-                    if ! execute_command_and_wait_new("\n", ":~#", 1000).await { 
+                    if ! execute_command_and_wait("\n", ":~#", 1000).await { 
                         app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
                         continue;
                     }
@@ -196,32 +189,98 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                 }
                 AppStep1Status::LoggedIn => {  // 已连接KVM，已登录（现在出现:~#）
                     log("已连接KVM，已登录（现在出现:~#）");
-                    if ! execute_command_and_wait_new("sudo pkill dhclient\n", ":~#", 1000).await { 
+                    set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
+                    set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Success);
+                    set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Testing);
+                    if ! execute_command_and_wait("sudo pkill dhclient\n", ":~#", 1000).await { 
                         log("关闭DHCP超时");
                         // ##
                     }
-                    while ! execute_command_and_wait_new("ping -c 1 172.168.100.1\n", "1 received", 1000).await {
+                    // 清空ip
+                    log("清空ip");
+                    if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
+                        log("清空ip超时");
+                        // ##
+                    };
+                    // 设置静态IP
+                    log("设置静态IP");
+                    if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
+                        log("设置静态IP超时");
+                        // ##
+                    };
+                    while ! execute_command_and_wait("ping -c 1 172.168.100.1\n", "1 received", 1000).await {
+                        set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Repairing);
                         log("需要发送CTRL C确保退出ping");
-                        if ! execute_command_and_wait_new("\x03", ":~#", 1000).await {
+                        if ! execute_command_and_wait("\x03", ":~#", 1000).await {
                             log("CTRL+C超时");
                             // ##
                         };
                         // 清空ip
                         log("清空ip");
-                        if ! execute_command_and_wait_new("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
+                        if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
                             log("清空ip超时");
                             // ##
                         };
                         // 设置静态IP
                         log("设置静态IP");
-                        if ! execute_command_and_wait_new("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
+                        if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
                             log("设置静态IP超时");
                             // ##
                         };
                     }
+                    set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
+                    set_target_ip(app_handle.clone(), "172.168.100.2");
+                    app_step1_status = AppStep1Status::Checking_Hardware;  // 检查硬件中
+                }
+                AppStep1Status::Checking_Hardware => {  // 检查硬件中
+                    log("检查硬件中");
+                    set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Testing);
+
+                    // log("检测ATX or Desk");
+                    serial_send("i2cdetect -ry 7\n").await;
+                    std::thread::sleep(Duration::from_millis(200));
+                    serial_send("Y\n").await;
+                    let patterns = ["UU", "3c"];
+                    let result = detect_serial_string(&patterns, 2000, 10).await;
+                    match result.as_str() {
+                        "UU" => {
+                            log("检测到Desk");
+                            set_current_hardware(app_handle.clone(), "Desk");
+                        }
+                        "3c" => {
+                            log("检测到ATX");
+                            set_current_hardware(app_handle.clone(), "ATX");
+                        }
+                        _ => {
+                            log("未检测到ATX或Desk, 弹窗判断");
+                            let result = show_dialog_and_wait(app_handle.clone(), "⚠️ 可能试屏幕接触不良导致无法判断版本，请手动选择：".to_string(), vec![
+                                serde_json::json!({ "text": "ATX" }),
+                                serde_json::json!({ "text": "Desk" })
+                            ]);
+                            if result == "ATX" {
+                                set_current_hardware(app_handle.clone(), "ATX");
+                            } else {
+                                // default Desk
+                                set_current_hardware(app_handle.clone(), "Desk");
+                            } 
+                        }
+                    }
+                    set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
+                    // app_step1_status = AppStep1Status::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
+
+                    // log("检测是否存在wifi模块");
+                    if ! execute_command_and_wait("ip a | grep wlan0\n", "state", 1000).await { 
+                        log("无wifi");
+                        // ##
+                    } else {
+                        log("有wifi");
+                    }
+
+                    // log("检测是否已经产测过+存在串号+6911是否有version");
+
                     loop {
                         log("sleep");
-                        std::thread::sleep(Duration::from_millis(1000));
+                        std::thread::sleep(Duration::from_millis(100));
                     }
                 }
                 _ => {}
