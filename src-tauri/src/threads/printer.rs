@@ -16,10 +16,10 @@ use std::thread;
 use std::time::Duration;
 
 // 打印使能
-const PRINTER_ENABLE: bool = false;
+pub const PRINTER_ENABLE: bool = false;
 
 // 打印机配置常量
-const TARGET_PRINTER: &str = "CHITENG-CT221B"; // 修改为指定的打印机名称
+pub const TARGET_PRINTER: &str = "CHITENG-CT221B"; // 修改为指定的打印机名称
 
 // USB设备VID/PID配置
 const TARGET_VID: u16 = 0x28E9; // 打印机厂商ID（十六进制）
@@ -390,7 +390,7 @@ fn usb_device_exists(vid: u16, pid: u16) -> bool {
 }
 
 // 参数化图像生成函数
-fn generate_image_with_params(serial: &str, name: &str, exist_wifi: bool) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+pub fn generate_image_with_params(serial: &str, name: &str, exist_wifi: bool) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let width_px = mm_to_pixels(WIDTH_MM) as u32;
     let height_px = mm_to_pixels(HEIGHT_MM) as u32;
     
@@ -493,7 +493,7 @@ fn generate_defects_image_with_params(text: &str) -> ImageBuffer<Rgb<u8>, Vec<u8
 }
 
 // 打印图像的优化版本，接受已生成的图像
-fn print_image(img: &ImageBuffer<Rgb<u8>, Vec<u8>>, printer_name: Option<&str>) -> Result<(), String> {
+pub fn print_image(img: &ImageBuffer<Rgb<u8>, Vec<u8>>, printer_name: Option<&str>) -> Result<(), String> {
     unsafe {
         // 1. 获取打印机设备上下文
         let printer_name_cstr = match printer_name {

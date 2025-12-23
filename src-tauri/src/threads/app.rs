@@ -7,15 +7,16 @@ use crate::threads::serial::{
     serial_send, detect_serial_string, wait_for_serial_data, execute_command_and_wait};
 use crate::threads::dialog_test::{show_dialog_and_wait};
 use lazy_static::lazy_static;
-use crate::threads::update_state::{AppStep1Status, AppTestStatus, set_step_status, clean_step1_status, set_target_ip, set_current_hardware};
+use crate::threads::update_state::{AppStep1Status, AppTestStatus, 
+    set_step_status, clean_step1_status, set_target_ip, set_current_hardware, set_target_serial};
 use tauri::async_runtime::JoinHandle;
 use crate::threads::server::spawn_file_server_task;
 use crate::threads::ssh::ssh_execute_command;
+use crate::threads::save::{get_config_str};
+use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
 
 const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
-
-// AppStep1Status
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -36,6 +37,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
         let mut app_step1_status = AppStep1Status::Unconnected;
         let mut current_step = app_step1_status.clone();
         let mut not_connected_kvm_count = 0;
+        let mut target_serial = String::new();
+        let mut target_name = String::new();
+        let mut wifi_exist = false;
         loop {
             // 每轮一定要检测的内容：
             if !is_usb_tool_connected().await {
@@ -263,16 +267,17 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     let handle = spawn_file_server_task();     // 启动文件服务器任务
                     std::thread::sleep(Duration::from_secs(1));                 // 等待文件服务器启动
                     // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                    let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
                     handle.abort();  // 下载完成后，终止文件服务器任务
 
                     log("找到文件,正在解压");
                     let _ = execute_command_and_wait("tar -xf /root/test.tar -C /root/\n", ":~#", 2000).await;
-                    set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
-                    app_step1_status = AppStep1Status::Checking_Hardware;  // 检查硬件中
 
                     log("设置文件权限");
                     let _ = execute_command_and_wait("sudo chmod -R +x /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
+                    
+                    set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
+                    app_step1_status = AppStep1Status::Checking_Hardware;  // 检查硬件中
                 }
                 AppStep1Status::Checking_Hardware => {  // 检查硬件中
                     log("检查硬件中");
@@ -281,7 +286,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     match ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/01_test_hardware.sh").await {
                         Ok(output) => {
                             // log(&format!("输出: \n{}", output));
-                            // 判断是否存在：“弹幕内容”，获取"弹窗内容："到"\n"之间的内容
+                            // 判断是否存在：“弹窗内容”，获取"弹窗内容："到"\n"之间的内容
                             if let Some(start) = output.find("弹窗内容：") {
                                 let content_start = start + "弹窗内容：".len();
                                 let remaining = &output[content_start..];
@@ -301,6 +306,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                                         log("用户选择了YES，清除已测试硬件记录");
                                         let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/02_rm_tested.sh").await.unwrap();
                                     }
+                                    // 等待弹窗消失500ms
+                                    std::thread::sleep(Duration::from_millis(500));
                                 }
                             }
                             if let Some(start) = output.find("当前板卡的串号为：") {
@@ -309,7 +316,42 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                                 if let Some(end) = remaining.find('\n') {
                                     let serial_number = &remaining[..end].trim();
                                     log(&format!("RUST检测到当前板卡的串号为: {}", serial_number));
+                                    set_target_serial(app_handle.clone(), serial_number);
+                                    target_serial = serial_number.to_string();
                                 }
+                            } else {
+                                // 生成新串号
+                                // # target_serial = ?
+                            }
+                            if let Some(start) = output.find("当前板卡的类型为：") {
+                                let content_start = start + "当前板卡的类型为：".len();
+                                let remaining = &output[content_start..];
+                                if let Some(end) = remaining.find('\n') {
+                                    let mut hardware_type = remaining[..end].trim().to_string();
+                                    if !hardware_type.contains("-") {
+                                        if hardware_type == "Unknown" {
+                                            log("当前板卡的类型为: Unknown, 弹窗判断");
+                                            let result = show_dialog_and_wait(app_handle.clone(), "⚠️ 可能试屏幕接触不良导致无法判断版本，请手动选择：".to_string(), vec![
+                                                serde_json::json!({ "text": "ATX" }),
+                                                serde_json::json!({ "text": "Desk" })
+                                            ]);
+                                            hardware_type = result;
+                                            // 等待弹窗消失500ms
+                                            std::thread::sleep(Duration::from_millis(500));
+                                        }
+                                        // 获取当前板卡的类型
+                                        let hardware_version_str = get_config_str("testing", "board_version");
+                                        // hardware_type = hardware_type-hardware_version_str
+                                        hardware_type = format!("{}-{}", hardware_type, hardware_version_str.unwrap_or_default());
+                                    }
+                                    log(&format!("RUST检测到当前板卡的类型为: {}", hardware_type));
+                                    set_current_hardware(app_handle.clone(), &hardware_type);
+                                    target_name = format!("NanoKVM-{}", hardware_type);
+                                }
+                            }
+                            if output.contains("当前板卡有wifi模块") {
+                                log("RUST检测到当前板卡有wifi模块");
+                                wifi_exist = true;
                             }
                         }
                         Err(e) => {
@@ -317,52 +359,71 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                         }
                     }
 
-                    // 加载6911ko：insmod /root/NanoKVM_Pro_Testing_V2_0/ko/lt6911_manage.ko
-                    
+                // AppStep1Status::Checking_Hardware => {  // 检查硬件中
+                    set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
+                    app_step1_status = AppStep1Status::Checking_eMMC;  // 检查eMMC中
+                }
+                AppStep1Status::Checking_eMMC => {  // 检查eMMC中
+                    log("检查eMMC中");
+                    set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Testing);
 
-
-
-                    // // log("检测ATX or Desk");
-                    // serial_send("i2cdetect -ry 7\n").await;
-                    // std::thread::sleep(Duration::from_millis(200));
-                    // serial_send("Y\n").await;
-                    // let patterns = ["UU", "3c"];
-                    // let result = detect_serial_string(&patterns, 2000, 10).await;
-                    // match result.as_str() {
-                    //     "UU" => {
-                    //         log("检测到Desk");
-                    //         set_current_hardware(app_handle.clone(), "Desk");
-                    //     }
-                    //     "3c" => {
-                    //         log("检测到ATX");
-                    //         set_current_hardware(app_handle.clone(), "ATX");
-                    //     }
-                    //     _ => {
-                    //         log("未检测到ATX或Desk, 弹窗判断");
-                    //         let result = show_dialog_and_wait(app_handle.clone(), "⚠️ 可能试屏幕接触不良导致无法判断版本，请手动选择：".to_string(), vec![
-                    //             serde_json::json!({ "text": "ATX" }),
-                    //             serde_json::json!({ "text": "Desk" })
-                    //         ]);
-                    //         if result == "ATX" {
-                    //             set_current_hardware(app_handle.clone(), "ATX");
-                    //         } else {
-                    //             // default Desk
-                    //             set_current_hardware(app_handle.clone(), "Desk");
-                    //         } 
-                    //     }
-                    // }
-                    // set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
-                    // // app_step1_status = AppStep1Status::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
-
-                    // // log("检测是否存在wifi模块");
-                    // if ! execute_command_and_wait("ip a | grep wlan0\n", "state", 1000).await { 
-                    //     log("无wifi");
-                    //     // ##
-                    // } else {
-                    //     log("有wifi");
-                    // }
-
-                    // log("检测是否已经产测过+存在串号+6911是否有version");
+                    match ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/03_test_emmc.sh").await {
+                        Ok(output) => {
+                            if output.contains("eMMC test passed") {
+                                log("eMMC测试通过");
+                                set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success);
+                                app_step1_status = AppStep1Status::Printing;
+                                continue;
+                            } else {
+                                log("eMMC测试失败");
+                                set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Failed);
+                                // 弹窗是否再检测一遍
+                                let response = show_dialog_and_wait(app_handle.clone(), "eMMC测试失败，是否再检测一遍".to_string(), vec![
+                                    serde_json::json!({ "text": "再次检测" }),
+                                    serde_json::json!({ "text": "否，直接打印不良" })
+                                ]);
+                                if response == "否，直接打印不良" {
+                                    log("用户选择了直接打印不良");
+                                    // ##
+                                } else {
+                                    log("用户选择了YES，重新检测eMMC");
+                                    continue;
+                                }
+                                // 等待弹窗消失500ms
+                                std::thread::sleep(Duration::from_millis(500));
+                            }
+                        }
+                        Err(e) => {
+                            log(&format!("SSH命令执行失败: {}", e));
+                        }
+                    }
+                }
+                AppStep1Status::Printing => {  // 打印中
+                    log("打印身份贴纸");
+                    if is_printer_connected().await {
+                        log("打印机已连接");
+                        let img = generate_image_with_params(&target_serial, &target_name, wifi_exist);
+                        if PRINTER_ENABLE {
+                            if let Err(e) = print_image(&img, Some(TARGET_PRINTER)) {
+                                log(&format!("打印图像失败: {}", e));
+                                // #
+                            }
+                        }
+                        app_step1_status = AppStep1Status::Finished;
+                        continue;
+                    } else {
+                        log("打印机未连接,弹窗检测");
+                        // 弹窗是否连接打印机
+                        let _ = show_dialog_and_wait(app_handle.clone(), "⚠️ 打印机未连接或打印机驱动未安装，绿灯常亮可能是充电状态，长按侧边按钮开机".to_string(), vec![
+                            serde_json::json!({ "text": "连接" }),
+                        ]);
+                        // 等待弹窗消失500ms
+                        std::thread::sleep(Duration::from_millis(500));
+                        continue;
+                    }
+                }
+                AppStep1Status::Finished => {  // 完成
+                    log("Step1完成");
 
                     loop {
                         log("sleep");

@@ -28,6 +28,9 @@ pub enum AppStep1Status {
     LoggedIn            = 6,  // 已连接KVM，已登录（现在出现:~#）
     Download_File       = 7,  // 下载文件中
     Checking_Hardware   = 8,  // 检查硬件中
+    Checking_eMMC       = 9,  // 检查eMMC中
+    Printing            = 10, // 打印中
+    Finished            = 11, // 完成
 }
 
 // 日志控制：false=关闭日志，true=开启日志
@@ -84,6 +87,14 @@ pub fn set_target_ip(app_handle: AppHandle, ip: &str) {
         log(&format!("测试任务推送目标IP失败: {}", e));
     }
 }
+
+// 设置串号
+pub fn set_target_serial(app_handle: AppHandle, serial: &str) {
+    if let Err(e) = app_handle.clone().emit("serial-number-update", serial) {
+        log(&format!("测试任务推送目标串号失败: {}", e));
+    }
+}
+
 
 // 设置测试项目状态(字符串+状态)
 pub fn set_step_status(app_handle: AppHandle, test_str: &str, test_status: AppTestStatus) {

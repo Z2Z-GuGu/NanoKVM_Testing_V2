@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 /camera-lib/target
 img/defects.png
+img/output.png

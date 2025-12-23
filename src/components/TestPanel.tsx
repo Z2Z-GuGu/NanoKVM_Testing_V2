@@ -12,8 +12,8 @@ interface TestButtonStates {
   wait_connection: TestButtonStatus;
   wait_boot: TestButtonStatus;
   get_ip: TestButtonStatus;
-  detect_hardware: TestButtonStatus;
   download_test: TestButtonStatus;
+  detect_hardware: TestButtonStatus;
   emmc_test: TestButtonStatus;
   uboot: TestButtonStatus;
   kernel: TestButtonStatus;
@@ -46,8 +46,8 @@ export function TestPanel({ isDark }: TestPanelProps) {
     wait_connection: 'untested',
     wait_boot: 'untested',
     get_ip: 'untested',
-    detect_hardware: 'untested',
     download_test: 'untested',
+    detect_hardware: 'untested',
     emmc_test: 'untested',
     uboot: 'untested',
     kernel: 'untested',
