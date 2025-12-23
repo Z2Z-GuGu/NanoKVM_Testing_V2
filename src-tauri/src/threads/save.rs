@@ -507,6 +507,47 @@ pub fn is_app_folder_empty() -> bool {
     }
 }
 
+// 获取app文件夹内tar结尾的文件路径，比如获取出来的内容如下：
+// file_path = "C:\\Users\\BuGu\\AppData\\Local\\NanoKVM-Testing\\app\\NanoKVM_Pro_Testing_V2_0.tar";
+pub fn get_app_file_path() -> PathBuf {
+    // 获取应用程序根路径
+    let root_path = match get_app_root() {
+        Ok(path) => path,
+        Err(_) => return PathBuf::new(),
+    };
+    
+    // 构建app文件夹路径
+    let app_dir = root_path.join("app");
+    
+    // 检查app文件夹是否存在
+    if !app_dir.exists() {
+        return PathBuf::new();
+    }
+    
+    // 读取app文件夹内的文件
+    match fs::read_dir(&app_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    
+                    // 检查是否为文件且以.tar结尾
+                    if path.is_file() && path.extension().map_or(false, |ext| ext == "tar") {
+                        return path;
+                    }
+                }
+            }
+            
+            // 如果没有找到.tar文件，返回空路径
+            PathBuf::new()
+        }
+        Err(_) => {
+            // 读取文件夹失败，返回空路径
+            PathBuf::new()
+        }
+    }
+}
+
 /// 获取测试状态
 /// 
 /// # 参数

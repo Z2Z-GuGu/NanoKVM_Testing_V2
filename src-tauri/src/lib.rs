@@ -2,6 +2,10 @@ mod threads;
 
 // 从dialog_test模块导入按钮点击处理命令
 use crate::threads::dialog_test::handle_button_click;
+// use std::sync::{Arc, Mutex};
+use tauri::async_runtime::JoinHandle;
+use std::time::Duration;
+use std::thread;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -21,7 +25,13 @@ pub fn run() {
             // threads::dialog_test::spawn_dialog_test_task(app.handle().clone());
             // 启动定时器功能线程
             // threads::timer::spawn_timer_task();
-            
+            // 启动文件下载线程
+            let handle = threads::server::spawn_file_server_task();
+            thread::sleep(Duration::from_secs(60));
+            // 等待文件下载线程中断
+            println!("文件下载线程中断");
+            // handle.await.unwrap();
+            handle.abort(); // 中断线程
             Ok(())
         })
         .run(tauri::generate_context!())
