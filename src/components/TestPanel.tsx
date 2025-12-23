@@ -110,8 +110,8 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <TestButton status={buttonStates.wait_connection} isDark={isDark}>等待连接</TestButton>
           <TestButton status={buttonStates.wait_boot} isDark={isDark}>等待开机</TestButton>
           <TestButton status={buttonStates.get_ip} isDark={isDark}>获取IP</TestButton>
-          <TestButton status={buttonStates.detect_hardware} isDark={isDark}>检测硬件</TestButton>
           <TestButton status={buttonStates.download_test} isDark={isDark}>下载产测</TestButton>
+          <TestButton status={buttonStates.detect_hardware} isDark={isDark}>检测硬件</TestButton>
           <TestButton status={buttonStates.emmc_test} isDark={isDark}>eMMC</TestButton>
         </div>
       </section>

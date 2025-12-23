@@ -8,3 +8,4 @@ pub mod save;
 pub mod app;
 pub mod update_state;
 pub mod server;
+pub mod ssh;

@@ -1,6 +1,6 @@
 use std::thread;
 use std::time::Duration;
-use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty};
+use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty, set_test_status};
 use crate::threads::serial::{is_usb_tool_connected};
 use crate::threads::printer::is_printer_connected;
 use crate::threads::camera::{get_camera_status, CameraStatus};
@@ -83,6 +83,15 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 log(&format!("测试任务推送机器编码失败: {}", e));
             }
         }
+
+        let serial = "Neal0015B";
+    
+        // 设置设备信息
+        println!("\n📝 设置设备信息:");
+        let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
+        let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
+        let _ = set_test_status(serial, "hardware", "Desk-F");
+        let _ = set_test_status(serial, "wifi_exist", "true");
 
         // 循环检测USB工具、打印机、摄像头是否连接
         loop{

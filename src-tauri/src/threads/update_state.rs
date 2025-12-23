@@ -26,7 +26,8 @@ pub enum AppStep1Status {
     Booting             = 4,  // 已连接KVM，开机中
     BootedLogin         = 5,  // 已连接KVM，已开机（现在出现login）
     LoggedIn            = 6,  // 已连接KVM，已登录（现在出现:~#）
-    Checking_Hardware   = 7,  // 检查硬件中
+    Download_File       = 7,  // 下载文件中
+    Checking_Hardware   = 8,  // 检查硬件中
 }
 
 // 日志控制：false=关闭日志，true=开启日志
@@ -102,4 +103,10 @@ pub fn clean_step1_status(app_handle: AppHandle) {
     set_step_status(app_handle.clone(), "download_test", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::UnTested);
     set_target_ip(app_handle.clone(), "-");
+}
+
+// 从字符串获取已测试项目，并更新状态
+pub fn update_tested_steps(app_handle: AppHandle, tested_str: &str) {
+    if tested_str.contains("hw_emmc") { set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success); }
+    if tested_str.contains("hw_emmc") { set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success); }
 }

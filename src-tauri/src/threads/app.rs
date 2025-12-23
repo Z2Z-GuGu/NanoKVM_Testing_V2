@@ -8,6 +8,9 @@ use crate::threads::serial::{
 use crate::threads::dialog_test::{show_dialog_and_wait};
 use lazy_static::lazy_static;
 use crate::threads::update_state::{AppStep1Status, AppTestStatus, set_step_status, clean_step1_status, set_target_ip, set_current_hardware};
+use tauri::async_runtime::JoinHandle;
+use crate::threads::server::spawn_file_server_task;
+use crate::threads::ssh::ssh_execute_command;
 
 const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
@@ -192,95 +195,178 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Testing);
-                    if ! execute_command_and_wait("sudo pkill dhclient\n", ":~#", 1000).await { 
-                        log("关闭DHCP超时");
-                        // ##
-                    }
-                    // 清空ip
-                    log("清空ip");
-                    if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
-                        log("清空ip超时");
-                        // ##
-                    };
-                    // 设置静态IP
-                    log("设置静态IP");
-                    if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
-                        log("设置静态IP超时");
-                        // ##
-                    };
-                    while ! execute_command_and_wait("ping -c 1 172.168.100.1\n", "1 received", 1000).await {
-                        set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Repairing);
-                        log("需要发送CTRL C确保退出ping");
-                        if ! execute_command_and_wait("\x03", ":~#", 1000).await {
-                            log("CTRL+C超时");
-                            // ##
-                        };
-                        // 清空ip
-                        log("清空ip");
-                        if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
-                            log("清空ip超时");
-                            // ##
-                        };
-                        // 设置静态IP
-                        log("设置静态IP");
-                        if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
-                            log("设置静态IP超时");
-                            // ##
-                        };
-                    }
+                    // 不连接测试主机时需要注释
+                    // if ! execute_command_and_wait("sudo pkill dhclient\n", ":~#", 1000).await { 
+                    //     log("关闭DHCP超时");
+                    //     // ##
+                    // }
+                    // // 清空ip
+                    // log("清空ip");
+                    // if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
+                    //     log("清空ip超时");
+                    //     // ##
+                    // };
+                    // // 设置静态IP
+                    // log("设置静态IP");
+                    // if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
+                    //     log("设置静态IP超时");
+                    //     // ##
+                    // };
+                    // while ! execute_command_and_wait("ping -c 1 172.168.100.1\n", "1 received", 1000).await {
+                    //     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Repairing);
+                    //     log("需要发送CTRL C确保退出ping");
+                    //     if ! execute_command_and_wait("\x03", ":~#", 1000).await {
+                    //         log("CTRL+C超时");
+                    //         // ##
+                    //     };
+                    //     // 清空ip
+                    //     log("清空ip");
+                    //     if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
+                    //         log("清空ip超时");
+                    //         // ##
+                    //     };
+                    //     // 设置静态IP
+                    //     log("设置静态IP");
+                    //     if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
+                    //         log("设置静态IP超时");
+                    //         // ##
+                    //     };
+                    // }
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
                     set_target_ip(app_handle.clone(), "172.168.100.2");
+                    app_step1_status = AppStep1Status::Download_File;  // 下载文件中
+                }
+                AppStep1Status::Download_File => {  // 下载文件中
+                    log("下载文件中");
+                    set_step_status(app_handle.clone(), "download_test", AppTestStatus::Testing);
+                    // 检测文件是否存在：curl "http://192.168.2.201:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
+                    if ! execute_command_and_wait("ls /root/test.tar\n", ":No", 500).await {
+                        let _ = execute_command_and_wait(" ", ":~#", 500).await;
+                        // 找到了文件,弹窗是否重新下载
+                        let response = show_dialog_and_wait(app_handle.clone(), "待测KVM中已存在产测文件，是否使用最新文件测试".to_string(), vec![
+                            serde_json::json!({ "text": "YES" }),
+                            serde_json::json!({ "text": "NO" })
+                        ]);
+                        if response == "NO" {
+                            log("用户选择了不重新下载");
+                            set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
+                            app_step1_status = AppStep1Status::Checking_Hardware;  // 未连接KVM
+                            continue;
+                        } else {
+                            log("用户选择了重新下载");
+                        }
+                    }
+                    log("删除旧文件");
+                    let _ = execute_command_and_wait("rm -rf /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
+                    
+                    log("开始下载");
+                    let handle = spawn_file_server_task();     // 启动文件服务器任务
+                    std::thread::sleep(Duration::from_secs(1));                 // 等待文件服务器启动
+                    // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
+                    let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    handle.abort();  // 下载完成后，终止文件服务器任务
+
+                    log("找到文件,正在解压");
+                    let _ = execute_command_and_wait("tar -xf /root/test.tar -C /root/\n", ":~#", 2000).await;
+                    set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
                     app_step1_status = AppStep1Status::Checking_Hardware;  // 检查硬件中
+
+                    log("设置文件权限");
+                    let _ = execute_command_and_wait("sudo chmod -R +x /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
                 }
                 AppStep1Status::Checking_Hardware => {  // 检查硬件中
                     log("检查硬件中");
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Testing);
 
-                    // log("检测ATX or Desk");
-                    serial_send("i2cdetect -ry 7\n").await;
-                    std::thread::sleep(Duration::from_millis(200));
-                    serial_send("Y\n").await;
-                    let patterns = ["UU", "3c"];
-                    let result = detect_serial_string(&patterns, 2000, 10).await;
-                    match result.as_str() {
-                        "UU" => {
-                            log("检测到Desk");
-                            set_current_hardware(app_handle.clone(), "Desk");
+                    match ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/01_test_hardware.sh").await {
+                        Ok(output) => {
+                            // log(&format!("输出: \n{}", output));
+                            // 判断是否存在：“弹幕内容”，获取"弹窗内容："到"\n"之间的内容
+                            if let Some(start) = output.find("弹窗内容：") {
+                                let content_start = start + "弹窗内容：".len();
+                                let remaining = &output[content_start..];
+                                if let Some(end) = remaining.find('\n') {
+                                    let popup_content = &remaining[..end].trim();
+                                    log(&format!("弹窗内容: {}", popup_content));
+                                    // 弹窗
+                                    let response = show_dialog_and_wait(app_handle.clone(), popup_content.to_string(), vec![
+                                        serde_json::json!({ "text": "YES" }),
+                                        serde_json::json!({ "text": "NO" })
+                                    ]);
+                                    if response == "NO" {
+                                        log("用户选择了NO");
+                                        // 获取哪些硬件已经通过产测
+                                        // #
+                                    } else {
+                                        log("用户选择了YES，清除已测试硬件记录");
+                                        let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/02_rm_tested.sh").await.unwrap();
+                                    }
+                                }
+                            }
+                            if let Some(start) = output.find("当前板卡的串号为：") {
+                                let content_start = start + "当前板卡的串号为：".len();
+                                let remaining = &output[content_start..];
+                                if let Some(end) = remaining.find('\n') {
+                                    let serial_number = &remaining[..end].trim();
+                                    log(&format!("RUST检测到当前板卡的串号为: {}", serial_number));
+                                }
+                            }
                         }
-                        "3c" => {
-                            log("检测到ATX");
-                            set_current_hardware(app_handle.clone(), "ATX");
-                        }
-                        _ => {
-                            log("未检测到ATX或Desk, 弹窗判断");
-                            let result = show_dialog_and_wait(app_handle.clone(), "⚠️ 可能试屏幕接触不良导致无法判断版本，请手动选择：".to_string(), vec![
-                                serde_json::json!({ "text": "ATX" }),
-                                serde_json::json!({ "text": "Desk" })
-                            ]);
-                            if result == "ATX" {
-                                set_current_hardware(app_handle.clone(), "ATX");
-                            } else {
-                                // default Desk
-                                set_current_hardware(app_handle.clone(), "Desk");
-                            } 
+                        Err(e) => {
+                            log(&format!("SSH命令执行失败: {}", e));
                         }
                     }
-                    set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
-                    // app_step1_status = AppStep1Status::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
 
-                    // log("检测是否存在wifi模块");
-                    if ! execute_command_and_wait("ip a | grep wlan0\n", "state", 1000).await { 
-                        log("无wifi");
-                        // ##
-                    } else {
-                        log("有wifi");
-                    }
+                    // 加载6911ko：insmod /root/NanoKVM_Pro_Testing_V2_0/ko/lt6911_manage.ko
+                    
+
+
+
+                    // // log("检测ATX or Desk");
+                    // serial_send("i2cdetect -ry 7\n").await;
+                    // std::thread::sleep(Duration::from_millis(200));
+                    // serial_send("Y\n").await;
+                    // let patterns = ["UU", "3c"];
+                    // let result = detect_serial_string(&patterns, 2000, 10).await;
+                    // match result.as_str() {
+                    //     "UU" => {
+                    //         log("检测到Desk");
+                    //         set_current_hardware(app_handle.clone(), "Desk");
+                    //     }
+                    //     "3c" => {
+                    //         log("检测到ATX");
+                    //         set_current_hardware(app_handle.clone(), "ATX");
+                    //     }
+                    //     _ => {
+                    //         log("未检测到ATX或Desk, 弹窗判断");
+                    //         let result = show_dialog_and_wait(app_handle.clone(), "⚠️ 可能试屏幕接触不良导致无法判断版本，请手动选择：".to_string(), vec![
+                    //             serde_json::json!({ "text": "ATX" }),
+                    //             serde_json::json!({ "text": "Desk" })
+                    //         ]);
+                    //         if result == "ATX" {
+                    //             set_current_hardware(app_handle.clone(), "ATX");
+                    //         } else {
+                    //             // default Desk
+                    //             set_current_hardware(app_handle.clone(), "Desk");
+                    //         } 
+                    //     }
+                    // }
+                    // set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
+                    // // app_step1_status = AppStep1Status::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
+
+                    // // log("检测是否存在wifi模块");
+                    // if ! execute_command_and_wait("ip a | grep wlan0\n", "state", 1000).await { 
+                    //     log("无wifi");
+                    //     // ##
+                    // } else {
+                    //     log("有wifi");
+                    // }
 
                     // log("检测是否已经产测过+存在串号+6911是否有version");
 
                     loop {
                         log("sleep");
-                        std::thread::sleep(Duration::from_millis(100));
+                        std::thread::sleep(Duration::from_secs(1));
                     }
                 }
                 _ => {}
