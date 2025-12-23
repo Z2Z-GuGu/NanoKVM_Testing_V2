@@ -15,6 +15,7 @@ interface TestButtonStates {
   download_test: TestButtonStatus;
   detect_hardware: TestButtonStatus;
   emmc_test: TestButtonStatus;
+  dtb: TestButtonStatus;
   uboot: TestButtonStatus;
   kernel: TestButtonStatus;
   app_install: TestButtonStatus;
@@ -49,6 +50,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
     download_test: 'untested',
     detect_hardware: 'untested',
     emmc_test: 'untested',
+    dtb: 'untested',
     uboot: 'untested',
     kernel: 'untested',
     app_install: 'untested',
@@ -127,6 +129,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <div className="w-24 flex items-center">
             <span className={isDark ? 'text-white' : 'text-neutral-900'}>系统更新</span>
           </div>
+          <TestButton status={buttonStates.dtb} isDark={isDark}>dtb</TestButton>
           <TestButton status={buttonStates.uboot} isDark={isDark}>uboot</TestButton>
           <TestButton status={buttonStates.kernel} isDark={isDark}>kernel</TestButton>
           <TestButton status={buttonStates.app_install} isDark={isDark}>APP安装</TestButton>
