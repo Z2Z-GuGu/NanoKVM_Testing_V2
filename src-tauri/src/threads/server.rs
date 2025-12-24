@@ -2,6 +2,7 @@ use std::thread;
 use tauri::async_runtime::{spawn, JoinHandle};
 use std::time::Duration;
 
+
 use warp::Filter;
 use bytes::Bytes;
 use std::fs::File;
@@ -21,6 +22,7 @@ fn log(msg: &str) {
 
 pub fn spawn_file_server_task() -> JoinHandle<()> {
     spawn(async move {
+        log("文件服务器任务开始");
         // 下载路由
         let download = warp::path("download")
             .and(warp::get())
@@ -38,7 +40,7 @@ pub fn spawn_file_server_task() -> JoinHandle<()> {
             .or(upload)
             .with(warp::cors().allow_any_origin());
 
-        warp::serve(routes).run(([192, 168, 1, 7], 8080)).await;
+        warp::serve(routes).run(([192, 168, 2, 201], 8080)).await;
     })
 }
 

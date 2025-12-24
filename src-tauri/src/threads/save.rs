@@ -4,7 +4,8 @@ use serde::{Deserialize, Serialize};
 use toml;
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-// use chrono::Local;
+use chrono::Local;
+use chrono::Datelike;
 
 lazy_static! {
     /// 全局存储应用程序根路径
@@ -643,3 +644,93 @@ pub fn set_test_log(serial: &str, date: &str, item: &str, log: &str) -> Result<(
     
     Ok(())
 }
+
+/// 创建新的串号，根据日期，测试主机编号，已经存储的数量等生成新的编号，规则如下
+/// 串号规则：
+// N d a L 0 0 0 0 0
+// │ │ │ │ │ │
+// │ │ │ │ │ └─ 序列号，十六进制
+// │ │ │ │ └─── 测试主机
+// │ │ │ └───── 周代码
+// │ │ └─────── 年代码
+// │ └───────── 产品配置/子类
+// └─────────── 产品代号
+// 产品代号
+//     N: NanoKVM
+// 产品配置/子类
+//     a: NanoKVM-Alpha
+//     b: NanoKVM-Beta
+//     c: NanoKVM-PCIe
+//     d: NanoKVM-Pro-ATX-Alpha
+//     e: NanoKVM-Pro-Desk-Alpha
+// 年代码
+//     a: 2025
+//     b: 2026
+//     ……
+// 周代码(第？周)
+//     a-z: 1-26周
+//     A-Z: 27-52周
+// 测试主机
+//     0：产测V1主机（618产测）
+//     1-9：产测V2主机（x86）
+///// 产品代号（4位十六进制，前面几位相同时产品代号从0递增）
+pub fn create_serial_number(product_config: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // 获取当前日期
+    let now = Local::now();
+    let year = now.year();
+    let week_number = now.iso_week().week() as u8;
+    
+    // 1. 产品代号 (固定为N)
+    let product_code = "N";
+    
+    // 2. 产品配置/子类
+    let mut config_code = "e";      // default to Desk
+    if product_config.contains("ATX") {
+        config_code = "d";
+    } 
+    
+    // 3. 年代码 (a=2025, b=2026, ...)
+    let year_code = ((year - 2025) as u8 + b'a') as char;
+    
+    // 4. 周代码 (a-z: 1-26周, A-Z: 27-52周)
+    let week_code = if week_number <= 26 {
+        (week_number - 1 + b'a') as char
+    } else {
+        (week_number - 27 + b'A') as char
+    };
+    
+    // 5. 测试主机编号
+    let machine_number = get_config_str("application", "machine_number")
+        .unwrap_or("1".to_string());
+    
+    // 6. 序列号 (5位十六进制，前面几位相同时从0递增)
+    let root_path = get_app_root()?;
+    let save_path = root_path.join("data").join("save");
+    
+    // 检查save目录是否存在
+    if !save_path.exists() {
+        fs::create_dir_all(&save_path)?;
+    }
+    
+    // 统计与当前前缀相同的序列号数量
+    let prefix = format!("{}{}{}{}{}", product_code, config_code, year_code, week_code, machine_number);
+    let mut serial_count = 0;
+    
+    for entry in fs::read_dir(&save_path)? {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy().to_string();
+        
+        // 检查文件是否为JSON文件且以当前前缀开头
+        if file_name.ends_with(".json") && file_name.starts_with(&prefix) {
+            serial_count += 1;
+        }
+    }
+    
+    // 生成4位十六进制序列号
+    let serial_hex = format!("{:04X}", serial_count);
+    
+    // 组合所有部分生成完整序列号
+    let serial_number = format!("{}{}{}{}{}{}", product_code, config_code, year_code, week_code, machine_number, serial_hex);
+    
+    Ok(serial_number)
+} 

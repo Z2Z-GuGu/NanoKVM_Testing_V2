@@ -2,6 +2,7 @@ use std::thread;
 use std::time::Duration;
 use tauri::async_runtime::spawn;
 use tauri::{AppHandle, Emitter};
+use tokio::time::sleep;
 use crate::threads::serial::{
     is_usb_tool_connected, get_current_data_density, 
     serial_send, detect_serial_string, wait_for_serial_data, execute_command_and_wait};
@@ -12,8 +13,9 @@ use crate::threads::update_state::{AppStep1Status, AppTestStatus,
 use tauri::async_runtime::JoinHandle;
 use crate::threads::server::spawn_file_server_task;
 use crate::threads::ssh::ssh_execute_command;
-use crate::threads::save::{get_config_str};
+use crate::threads::save::{get_config_str, create_serial_number};
 use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
+use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing};
 
 const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
@@ -40,6 +42,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
         let mut target_serial = String::new();
         let mut target_name = String::new();
         let mut wifi_exist = false;
+        let handle = spawn_file_server_task();     // 启动文件服务器任务
         loop {
             // 每轮一定要检测的内容：
             if !is_usb_tool_connected().await {
@@ -244,7 +247,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     log("下载文件中");
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Testing);
                     // 检测文件是否存在：curl "http://192.168.2.201:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                    if ! execute_command_and_wait("ls /root/test.tar\n", ":No", 500).await {
+                    if ! execute_command_and_wait("ls /root/test.tar\n", "cannot", 500).await {
                         let _ = execute_command_and_wait(" ", ":~#", 500).await;
                         // 找到了文件,弹窗是否重新下载
                         let response = show_dialog_and_wait(app_handle.clone(), "待测KVM中已存在产测文件，是否使用最新文件测试".to_string(), vec![
@@ -259,16 +262,18 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                         } else {
                             log("用户选择了重新下载");
                         }
+                    } else {
+                        let _ = execute_command_and_wait(" ", ":~#", 500).await;
                     }
+                    
                     log("删除旧文件");
                     let _ = execute_command_and_wait("rm -rf /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
                     
                     log("开始下载");
-                    let handle = spawn_file_server_task();     // 启动文件服务器任务
-                    std::thread::sleep(Duration::from_secs(1));                 // 等待文件服务器启动
+                    std::thread::sleep(Duration::from_secs(2));                 // 等待文件服务器启动
                     // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                    let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
-                    handle.abort();  // 下载完成后，终止文件服务器任务
+                    let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    
 
                     log("找到文件,正在解压");
                     let _ = execute_command_and_wait("tar -xf /root/test.tar -C /root/\n", ":~#", 2000).await;
@@ -310,19 +315,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                                     std::thread::sleep(Duration::from_millis(500));
                                 }
                             }
-                            if let Some(start) = output.find("当前板卡的串号为：") {
-                                let content_start = start + "当前板卡的串号为：".len();
-                                let remaining = &output[content_start..];
-                                if let Some(end) = remaining.find('\n') {
-                                    let serial_number = &remaining[..end].trim();
-                                    log(&format!("RUST检测到当前板卡的串号为: {}", serial_number));
-                                    set_target_serial(app_handle.clone(), serial_number);
-                                    target_serial = serial_number.to_string();
-                                }
-                            } else {
-                                // 生成新串号
-                                // # target_serial = ?
-                            }
+                            // 获取当前板卡的类型
                             if let Some(start) = output.find("当前板卡的类型为：") {
                                 let content_start = start + "当前板卡的类型为：".len();
                                 let remaining = &output[content_start..];
@@ -349,6 +342,24 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                                     target_name = format!("NanoKVM-{}", hardware_type);
                                 }
                             }
+                            // 获取或生成当前板卡的串号
+                            if let Some(start) = output.find("当前板卡的串号为：") {
+                                let content_start = start + "当前板卡的串号为：".len();
+                                let remaining = &output[content_start..];
+                                if let Some(end) = remaining.find('\n') {
+                                    let serial_number = &remaining[..end].trim();
+                                    log(&format!("RUST检测到当前板卡的串号为: {}", serial_number));
+                                    set_target_serial(app_handle.clone(), serial_number);
+                                    target_serial = serial_number.to_string();
+                                }
+                            } else {
+                                // 生成新串号
+                                let serial_number = create_serial_number(&target_name).unwrap_or_default();
+                                log(&format!("生成新串号: {}", serial_number));
+                                set_target_serial(app_handle.clone(), &serial_number);
+                                target_serial = serial_number;
+                            }
+                            // 获取当前板卡是否有wifi模块
                             if output.contains("当前板卡有wifi模块") {
                                 log("RUST检测到当前板卡有wifi模块");
                                 wifi_exist = true;
@@ -359,7 +370,6 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                         }
                     }
 
-                // AppStep1Status::Checking_Hardware => {  // 检查硬件中
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
                     app_step1_status = AppStep1Status::Checking_eMMC;  // 检查eMMC中
                 }
@@ -423,11 +433,15 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     }
                 }
                 AppStep1Status::Finished => {  // 完成
-                    log("Step1完成");
+                    log("Step1完成，启动Step2内容");
+                    handle.abort();  // 下载完成后，终止文件服务器任务
+                    spawn_step2_file_update(app_handle.clone());
+                    spawn_step2_hdmi_testing(app_handle.clone());
+                    log("Step2启动完成");
 
                     loop {
                         log("sleep");
-                        std::thread::sleep(Duration::from_secs(1));
+                        tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }
                 _ => {}

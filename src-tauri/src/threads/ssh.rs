@@ -4,10 +4,20 @@ use std::net::TcpStream;
 use std::path::Path;
 use tokio::task;
 
-// const HOST: &str = "192.168.1.109";
-const HOST: &str = "192.168.1.15";
+const HOST: &str = "192.168.1.109";
+// const HOST: &str = "192.168.1.15";
 const USER: &str = "root";
 const PASSWORD: &str = "sipeed"; // 密码认证
+
+// 日志控制：false=关闭日志，true=开启日志
+const LOG_ENABLE: bool = true;
+
+// 自定义日志函数
+fn log(msg: &str) {
+    if LOG_ENABLE {
+        println!("[ssh]{}", msg);
+    }
+}
 
 pub async fn ssh_execute_command(command: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let command = command.to_string();
@@ -28,7 +38,7 @@ pub async fn ssh_execute_command(command: &str) -> Result<String, Box<dyn std::e
             return Err("SSH 认证失败".to_string().into());
         }
         
-        println!("✅ SSH 连接成功！执行命令: {}", command);
+        log(&format!("✅ SSH 连接成功！执行命令: {}", command));
         
         // 执行命令
         let mut channel = session.channel_session()?;
@@ -56,6 +66,25 @@ pub async fn ssh_execute_command(command: &str) -> Result<String, Box<dyn std::e
             Err(format!("命令执行失败，退出状态: {}\n输出: {}", exit_status, output_str).into())
         }
     }).await?
+}
+
+// 执行命令判断是否成功，返回结果包含是否成功和命令输出
+pub async fn ssh_execute_command_check_success(command: &str, success_keyword: &str) -> Result<(bool, String), Box<dyn std::error::Error + Send + Sync>> {
+    match ssh_execute_command(command).await {
+        Ok(output) => {
+            let success = output.contains(success_keyword);
+            if success {
+                // log(&format!("命令执行成功，包含关键词: {}", success_keyword));
+            } else {
+                // log(&format!("命令执行失败，不包含关键词: {}", success_keyword));
+            }
+            Ok((success, output))
+        }
+        Err(e) => {
+            log(&format!("SSH命令执行失败: {}", e));
+            Err(e)
+        }
+    }
 }
 
 // #[tokio::main]

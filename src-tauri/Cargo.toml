@@ -42,3 +42,8 @@ toml = "0.8"    # 用于TOML文件解析
 warp = "0.3"
 bytes = "1.0"
 ssh2 = "0.9"
+windows = { version = "0.54", features = [
+    "Win32_Graphics_Gdi",
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }

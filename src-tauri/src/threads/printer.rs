@@ -434,7 +434,7 @@ pub fn generate_image_with_params(serial: &str, name: &str, exist_wifi: bool) ->
     }
 
     // save to output.png
-    img.save("../img/output.png").expect("无法保存图像");
+    // img.save("../img/output.png").expect("无法保存图像");
 
     img
 }
@@ -487,7 +487,7 @@ fn generate_defects_image_with_params(text: &str) -> ImageBuffer<Rgb<u8>, Vec<u8
     }
 
     // save to output.png
-    img.save("../img/defects.png").expect("无法保存图像");
+    // img.save("../img/defects.png").expect("无法保存图像");
 
     img
 }
