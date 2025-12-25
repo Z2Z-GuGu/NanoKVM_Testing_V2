@@ -1,7 +1,5 @@
 // 更新前端状态库：使用几个函数直接确定前端状态亮哪个灭哪个
-use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
-use lazy_static::lazy_static;
 use std::fmt;
 use crate::threads::save::{get_config_str};
 
@@ -28,7 +26,7 @@ pub enum AppStep1Status {
     LoggedIn            = 6,  // 已连接KVM，已登录（现在出现:~#）
     Download_File       = 7,  // 下载文件中
     Checking_Hardware   = 8,  // 检查硬件中
-    Checking_eMMC       = 9,  // 检查eMMC中
+    Checking_EMMC       = 9,  // 检查eMMC中
     Printing            = 10, // 打印中
     Finished            = 11, // 完成
 }

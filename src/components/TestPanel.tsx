@@ -23,8 +23,8 @@ interface TestButtonStates {
   hdmi_io_test: TestButtonStatus;
   hdmi_loop_test: TestButtonStatus;
   hdmi_capture_test: TestButtonStatus;
-  hdmi_write_edid: TestButtonStatus;
   hdmi_version: TestButtonStatus;
+  hdmi_write_edid: TestButtonStatus;
   usb_wait_connection: TestButtonStatus;
   eth_wait_connection: TestButtonStatus;
   eth_upload_test: TestButtonStatus;
@@ -58,8 +58,8 @@ export function TestPanel({ isDark }: TestPanelProps) {
     hdmi_io_test: 'untested',
     hdmi_loop_test: 'untested',
     hdmi_capture_test: 'untested',
-    hdmi_write_edid: 'untested',
     hdmi_version: 'untested',
+    hdmi_write_edid: 'untested',
     usb_wait_connection: 'untested',
     eth_wait_connection: 'untested',
     eth_upload_test: 'untested',
@@ -144,8 +144,8 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <TestButton status={buttonStates.hdmi_io_test} isDark={isDark}>测试IO</TestButton>
           <TestButton status={buttonStates.hdmi_loop_test} isDark={isDark}>测试环出</TestButton>
           <TestButton status={buttonStates.hdmi_capture_test} isDark={isDark}>测试采集</TestButton>
-          <TestButton status={buttonStates.hdmi_write_edid} isDark={isDark}>写EDID</TestButton>
           <TestButton status={buttonStates.hdmi_version} isDark={isDark}>Version</TestButton>
+          <TestButton status={buttonStates.hdmi_write_edid} isDark={isDark}>写EDID</TestButton>
         </div>
 
         {/* USB接口 */}

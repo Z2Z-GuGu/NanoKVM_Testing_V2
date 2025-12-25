@@ -1,7 +1,6 @@
 use ssh2::Session;
-use std::io::{Read, Write};
+use std::io::Read;
 use std::net::TcpStream;
-use std::path::Path;
 use tokio::task;
 
 const HOST: &str = "192.168.1.109";

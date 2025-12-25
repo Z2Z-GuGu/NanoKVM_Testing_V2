@@ -1,21 +1,17 @@
-use std::thread;
 use std::time::Duration;
 use tauri::async_runtime::spawn;
-use tauri::{AppHandle, Emitter};
-use tokio::time::sleep;
+use tauri::{AppHandle};
 use crate::threads::serial::{
     is_usb_tool_connected, get_current_data_density, 
-    serial_send, detect_serial_string, wait_for_serial_data, execute_command_and_wait};
+    serial_send, detect_serial_string, execute_command_and_wait};
 use crate::threads::dialog_test::{show_dialog_and_wait};
-use lazy_static::lazy_static;
 use crate::threads::update_state::{AppStep1Status, AppTestStatus, 
     set_step_status, clean_step1_status, set_target_ip, set_current_hardware, set_target_serial};
-use tauri::async_runtime::JoinHandle;
 use crate::threads::server::spawn_file_server_task;
 use crate::threads::ssh::ssh_execute_command;
 use crate::threads::save::{get_config_str, create_serial_number};
 use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
-use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing};
+use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, spawn_step2_usb_testing};
 
 const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
@@ -41,6 +37,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
         let mut not_connected_kvm_count = 0;
         let mut target_serial = String::new();
         let mut target_name = String::new();
+        let mut target_type = String::new();
         let mut wifi_exist = false;
         let handle = spawn_file_server_task();     // 启动文件服务器任务
         loop {
@@ -340,6 +337,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                                     log(&format!("RUST检测到当前板卡的类型为: {}", hardware_type));
                                     set_current_hardware(app_handle.clone(), &hardware_type);
                                     target_name = format!("NanoKVM-{}", hardware_type);
+                                    // NanoKVM_Pro (Desk-B) NeaR00293
+                                    target_type = format!("NanoKVM_Pro ({}) ", hardware_type);
                                 }
                             }
                             // 获取或生成当前板卡的串号
@@ -371,9 +370,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     }
 
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
-                    app_step1_status = AppStep1Status::Checking_eMMC;  // 检查eMMC中
+                    app_step1_status = AppStep1Status::Checking_EMMC;  // 检查eMMC中
                 }
-                AppStep1Status::Checking_eMMC => {  // 检查eMMC中
+                AppStep1Status::Checking_EMMC => {  // 检查eMMC中
                     log("检查eMMC中");
                     set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Testing);
 
@@ -436,7 +435,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     log("Step1完成，启动Step2内容");
                     handle.abort();  // 下载完成后，终止文件服务器任务
                     spawn_step2_file_update(app_handle.clone());
-                    spawn_step2_hdmi_testing(app_handle.clone());
+                    spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
+                    spawn_step2_usb_testing(app_handle.clone());
                     log("Step2启动完成");
 
                     loop {
