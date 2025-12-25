@@ -9,7 +9,7 @@ use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
 use tauri::{AppHandle, Emitter};
 use tokio;
 use crate::threads::app::spawn_app_step1_task;
-use crate::threads::update_state::{set_server_state};
+use crate::threads::update_state::{set_server_state, set_upload_count};
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -83,6 +83,9 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 log(&format!("测试任务推送机器编码失败: {}", e));
             }
         }
+
+        // 推送待上传数量到前端
+        set_upload_count(app_handle.clone(), 23);
 
         let serial = "Neal0015B";
     

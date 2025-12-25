@@ -11,9 +11,9 @@ use crate::threads::server::spawn_file_server_task;
 use crate::threads::ssh::ssh_execute_command;
 use crate::threads::save::{get_config_str, create_serial_number};
 use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
-use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, spawn_step2_usb_testing};
+use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
+    spawn_step2_usb_testing, spawn_step2_net_testing};
 
-const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 
 // 日志控制：false=关闭日志，true=开启日志
@@ -269,7 +269,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     log("开始下载");
                     std::thread::sleep(Duration::from_secs(2));                 // 等待文件服务器启动
                     // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                    let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    // let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
                     
 
                     log("找到文件,正在解压");
@@ -437,6 +438,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     spawn_step2_file_update(app_handle.clone());
                     spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
                     spawn_step2_usb_testing(app_handle.clone());
+                    spawn_step2_net_testing(app_handle.clone());
                     log("Step2启动完成");
 
                     loop {
@@ -444,7 +446,6 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                         tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }
-                _ => {}
             }
             std::thread::sleep(Duration::from_millis(100));
         }

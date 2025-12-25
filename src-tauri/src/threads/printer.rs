@@ -16,7 +16,7 @@ use std::thread;
 use std::time::Duration;
 
 // 打印使能
-pub const PRINTER_ENABLE: bool = true;
+pub const PRINTER_ENABLE: bool = false;
 
 // 打印机配置常量
 pub const TARGET_PRINTER: &str = "CHITENG-CT221B"; // 修改为指定的打印机名称

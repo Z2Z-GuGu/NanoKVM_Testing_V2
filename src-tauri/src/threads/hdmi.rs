@@ -54,15 +54,15 @@ struct MonitorInfo {
     device_name: String,
 }
 
-impl MonitorInfo {
-    fn width(&self) -> i32 {
-        self.right - self.left
-    }
+// impl MonitorInfo {
+//     fn width(&self) -> i32 {
+//         self.right - self.left
+//     }
     
-    fn height(&self) -> i32 {
-        self.bottom - self.top
-    }
-}
+//     fn height(&self) -> i32 {
+//         self.bottom - self.top
+//     }
+// }
 
 fn enumerate_monitors() -> Result<Vec<MonitorInfo>> {
     unsafe {

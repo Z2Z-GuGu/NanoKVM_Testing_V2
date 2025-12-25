@@ -163,7 +163,7 @@ pub fn serial_management_task() {
     spawn(async move {
         let mut serial_port: Option<Arc<Mutex<SerialStream>>> = None;
         let mut serial_connect_err_count = 0;
-        clear_slide_filter();
+        clear_slide_filter().await;
         
         // 创建发送和接收队列
         let (send_queue_tx, mut send_queue_rx) = mpsc::channel::<Vec<u8>>(100);

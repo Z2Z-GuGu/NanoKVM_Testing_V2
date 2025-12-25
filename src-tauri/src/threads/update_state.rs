@@ -93,6 +93,13 @@ pub fn set_target_serial(app_handle: AppHandle, serial: &str) {
     }
 }
 
+// 设置待上传数量
+pub fn set_upload_count(app_handle: AppHandle, count: u64) {
+    if let Err(e) = app_handle.clone().emit("upload-count-update", count) {
+        log(&format!("测试任务推送上传数量失败: {}", e));
+    }
+}
+
 
 // 设置测试项目状态(字符串+状态)
 pub fn set_step_status(app_handle: AppHandle, test_str: &str, test_status: AppTestStatus) {
@@ -114,8 +121,3 @@ pub fn clean_step1_status(app_handle: AppHandle) {
     set_target_ip(app_handle.clone(), "-");
 }
 
-// 从字符串获取已测试项目，并更新状态
-pub fn update_tested_steps(app_handle: AppHandle, tested_str: &str) {
-    if tested_str.contains("hw_emmc") { set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success); }
-    if tested_str.contains("hw_emmc") { set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success); }
-}

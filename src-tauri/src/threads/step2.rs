@@ -5,14 +5,16 @@ use tokio::time::sleep;
 use crate::threads::update_state::{AppTestStatus, set_step_status};
 use crate::threads::ssh::{ssh_execute_command_check_success, ssh_execute_command};
 use crate::threads::camera::{get_camera_status, CameraStatus};
+use crate::threads::server::spawn_file_server_task;
+use crate::threads::save::get_config_str;
 
-const DATA_DENSITY_THRESHOLD: u64 = 100;            // 数据密度大小判别
-const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
-
-const VIN_TEST_MAX_RETRY_COUNT: u64 = 5;
-const VERSION_TEST_MAX_RETRY_COUNT: u64 = 1;
-const EDID_TEST_MAX_RETRY_COUNT: u64 = 3;
+const HDMI_IO_TEST_MAX_RETRY_COUNT: u64 = 5;
+const HDMI_VIN_TEST_MAX_RETRY_COUNT: u64 = 5;
+const HDMI_VERSION_TEST_MAX_RETRY_COUNT: u64 = 1;
+const HDMI_EDID_TEST_MAX_RETRY_COUNT: u64 = 3;
 const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
+const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
+const ETH_UPLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -25,16 +27,18 @@ fn log(msg: &str) {
 }
 
 // 自动多次测试
-async fn auto_test_with_retry(app_handle: &AppHandle, test_name: &str, test_cmd: &str, success_msg: &str, max_retry: u64) -> bool {
+async fn auto_test_with_retry(app_handle: &AppHandle, test_name: &str, test_cmd: &str, success_msg: &str, max_retry: u64) -> (bool, String) {
     let mut retry_count = 0;
     set_step_status(app_handle.clone(), test_name, AppTestStatus::Testing);
+    let mut last_output = String::new();
     while retry_count < max_retry {
         log(&format!("{} 测试中...", test_name));
         let (success, output) = ssh_execute_command_check_success(test_cmd, success_msg).await.unwrap_or((false, String::new()));
+        last_output = output.clone();
         if success {
             log(&format!("{} 成功", test_name));
             set_step_status(app_handle.clone(), test_name, AppTestStatus::Success);
-            return true;
+            return (true, output);
         } else {
             set_step_status(app_handle.clone(), test_name, AppTestStatus::Repairing);
             log(&format!("{} 失败，输出: {}", test_name, output));
@@ -43,7 +47,7 @@ async fn auto_test_with_retry(app_handle: &AppHandle, test_name: &str, test_cmd:
         }
     }
     set_step_status(app_handle.clone(), test_name, AppTestStatus::Failed);
-    false
+    (false, last_output)
 }
 
 pub fn spawn_step2_file_update(app_handle: AppHandle) {
@@ -131,32 +135,25 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         set_step_status(app_handle.clone(), "hdmi_wait_connection", AppTestStatus::Success);
 
         // hdmi_io_test
-        set_step_status(app_handle.clone(), "hdmi_io_test", AppTestStatus::Testing);
-        // ssh test hdmi io & if not pass print output
-        log("hdmi_io_test中...");
-        let (hdmi_io_test_success, io_output) = ssh_execute_command_check_success("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh io", "HDMI IO test passed").await.unwrap_or((false, String::new()));
-        log("hdmi io 测试完成，收集测试结果");
-        if !hdmi_io_test_success {
-            log(&format!("hdmi_io_test失败，输出: {}", io_output));
-            if io_output.contains("LT86102 RST 引脚异常") { lt86102_rst_io = false; }
-            if io_output.contains("LT6911 RST 引脚异常") { lt6911_rst_io = false; }
-            if io_output.contains("LT86102 RX 引脚异常") { lt86102_rx_io = false; }
-            if io_output.contains("LT86102 TX 引脚异常") { lt86102_tx_io = false; }
-            if io_output.contains("LT6911 INT 引脚异常") { lt6911_int_io = false; }
-            if io_output.contains("LT6911 I2C 引脚异常") { lt6911_i2c_io = false; }
-            if io_output.contains("LT86102 I2C 引脚异常") { lt86102_i2c_io = false; }
-            set_step_status(app_handle.clone(), "hdmi_io_test", AppTestStatus::Repairing);
-            if lt6911_rst_io && lt86102_rst_io && lt86102_rx_io && lt86102_tx_io && lt6911_int_io && lt6911_i2c_io && lt86102_i2c_io {
-                log("所有引脚正常");
-            }
-        } else {
-            log("hdmi_io_test成功");
-            set_step_status(app_handle.clone(), "hdmi_io_test", AppTestStatus::Success);
+        let (hdmi_io_test_result, hdmi_io_test_output) = auto_test_with_retry(&app_handle, "hdmi_io_test", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh io", "HDMI IO test passed", HDMI_IO_TEST_MAX_RETRY_COUNT).await;
+        if !hdmi_io_test_result {
+            log(&format!("hdmi_io_test失败，输出: {}", hdmi_io_test_output));
+            if hdmi_io_test_output.contains("LT86102 RST 引脚异常") { lt86102_rst_io = false; }
+            if hdmi_io_test_output.contains("LT6911 RST 引脚异常") { lt6911_rst_io = false; }
+            if hdmi_io_test_output.contains("LT86102 RX 引脚异常") { lt86102_rx_io = false; }
+            if hdmi_io_test_output.contains("LT86102 TX 引脚异常") { lt86102_tx_io = false; }
+            if hdmi_io_test_output.contains("LT6911 INT 引脚异常") { lt6911_int_io = false; }
+            if hdmi_io_test_output.contains("LT6911 I2C 引脚异常") { lt6911_i2c_io = false; }
+            if hdmi_io_test_output.contains("LT86102 I2C 引脚异常") { lt86102_i2c_io = false; }
+        }
+
+        if lt6911_rst_io && lt86102_rst_io && lt86102_rx_io && lt86102_tx_io && lt6911_int_io && lt6911_i2c_io && lt86102_i2c_io {
+            log("所有引脚正常");
         }
 
         // 测试环出
         set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Testing);
-        while true {
+        loop {
             log("hdmi loop out 测试中...");
             let camera_status = get_camera_status().await;
             match camera_status {
@@ -179,14 +176,14 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         }
 
         // 测试采集
-        let _ = auto_test_with_retry(&app_handle, "hdmi_capture_test", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh vin", "HDMI VIN test passed", VIN_TEST_MAX_RETRY_COUNT).await;
+        let _ = auto_test_with_retry(&app_handle, "hdmi_capture_test", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh vin", "HDMI VIN test passed", HDMI_VIN_TEST_MAX_RETRY_COUNT).await;
 
         // 写入version
         let full_version_str = format!("{}{}", target_type, target_serial);
-        let _ = auto_test_with_retry(&app_handle, "hdmi_version", &format!("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh version \"{}\"", full_version_str), "HDMI version write passed", VERSION_TEST_MAX_RETRY_COUNT).await;
+        let _ = auto_test_with_retry(&app_handle, "hdmi_version", &format!("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh version \"{}\"", full_version_str), "HDMI version write passed", HDMI_VERSION_TEST_MAX_RETRY_COUNT).await;
 
         // 写入EDID
-        let _ = auto_test_with_retry(&app_handle, "hdmi_write_edid", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh edid", "HDMI EDID write passed", EDID_TEST_MAX_RETRY_COUNT).await;
+        let _ = auto_test_with_retry(&app_handle, "hdmi_write_edid", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh edid", "HDMI EDID write passed", HDMI_EDID_TEST_MAX_RETRY_COUNT).await;
         
         loop {
             // log("sleep");
@@ -208,8 +205,22 @@ pub fn spawn_step2_net_testing(app_handle: AppHandle) {
         log("网络测试中...");
         set_step_status(app_handle.clone(), "eth_wait_connection", AppTestStatus::Success);
         let handle = spawn_file_server_task();     // 启动文件服务器任务
-
         log("文件服务器任务已启动");
+        // 获取阈值
+        let upload_speed_threshold = get_config_str("testing", "eth_up_speed").unwrap_or("300".to_string());
+        let download_speed_threshold = get_config_str("testing", "eth_down_speed").unwrap_or("500".to_string());
+        
+        // 测试命令
+        let upload_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh upload {} \"http://192.168.1.7:8080/upload\"", upload_speed_threshold);
+        let download_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh download {} \"http://192.168.1.7:8080/download\"", download_speed_threshold);
+
+        log(&format!("上传测试命令：{}", upload_test_cmd));
+        log(&format!("下载测试命令：{}", download_test_cmd));
+        
+        // 测试上传
+        let _ = auto_test_with_retry(&app_handle, "eth_upload_test", &upload_test_cmd, "ETH upload test passed", ETH_UPLOAD_TEST_MAX_RETRY_COUNT).await;
+        // 测试下载
+        let _ = auto_test_with_retry(&app_handle, "eth_download_test", &download_test_cmd, "ETH download test passed", ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT).await;
 
         handle.abort();
         sleep(Duration::from_secs(1)).await;
