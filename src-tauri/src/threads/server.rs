@@ -38,8 +38,8 @@ pub fn spawn_file_server_task() -> JoinHandle<()> {
             .or(upload)
             .with(warp::cors().allow_any_origin());
 
-        warp::serve(routes).run(([192, 168, 1, 7], 8080)).await;
-        // warp::serve(routes).run(([192, 168, 2, 201], 8080)).await;
+        // warp::serve(routes).run(([192, 168, 1, 7], 8080)).await;
+        warp::serve(routes).run(([192, 168, 2, 201], 8080)).await;
     })
 }
 

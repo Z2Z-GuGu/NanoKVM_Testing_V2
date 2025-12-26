@@ -10,6 +10,7 @@ use tauri::{AppHandle, Emitter};
 use tokio;
 use crate::threads::app::spawn_app_step1_task;
 use crate::threads::update_state::{set_server_state, set_upload_count};
+use crate::threads::wifi_ap::spawn_wifi_ap;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -25,6 +26,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
     thread::spawn(move || {
         log("初始化线程已启动");
         
+        // 初始化AppDate
         let app_name = "NanoKVM-Testing";
         match init_appdata(app_name) {
             Ok(root_path) => {
@@ -40,6 +42,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 std::process::exit(1);
             }
         }
+
         // 延迟2秒后推送初始测试数据，确保前端已经准备好
         std::thread::sleep(std::time::Duration::from_secs(2));
 
@@ -75,6 +78,15 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 thread::sleep(Duration::from_millis(100));
             }
         }
+        
+        // 初始化wifi-ap
+        if let Some(ap_number) = &machine_number {
+            let ssid = format!("NanoKVM_WiFi_Test_{}", ap_number);
+            let password = "nanokvmwifi";
+            log(&format!("初始化WiFi热点: {} {}", ssid, password));
+            let wifi_ap_controller = spawn_wifi_ap(&ssid, &password);
+        }
+        // wifi.sh connect_start NanoKVM_WiFi_Test_1 nanokvmwifi
 
         // 推送机器编号到前端
         if let Some(number) = &machine_number {

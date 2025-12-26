@@ -10,3 +10,4 @@ pub mod server;
 pub mod ssh;
 pub mod step2;
 pub mod hdmi;
+pub mod wifi_ap;

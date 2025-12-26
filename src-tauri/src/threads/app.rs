@@ -269,10 +269,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     log("开始下载");
                     std::thread::sleep(Duration::from_secs(2));                 // 等待文件服务器启动
                     // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                    let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
-                    // let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    // let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
                     
-
                     log("找到文件,正在解压");
                     let _ = execute_command_and_wait("tar -xf /root/test.tar -C /root/\n", ":~#", 2000).await;
 
@@ -438,7 +437,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     spawn_step2_file_update(app_handle.clone());
                     spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
                     spawn_step2_usb_testing(app_handle.clone());
-                    spawn_step2_net_testing(app_handle.clone());
+                    spawn_step2_net_testing(app_handle.clone(), "192.168.2.201");
                     log("Step2启动完成");
 
                     loop {

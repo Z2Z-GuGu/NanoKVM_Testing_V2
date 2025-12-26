@@ -200,7 +200,8 @@ pub fn spawn_step2_usb_testing(app_handle: AppHandle) {
     });
 }
 
-pub fn spawn_step2_net_testing(app_handle: AppHandle) {
+pub fn spawn_step2_net_testing(app_handle: AppHandle, ip: &str) {
+    let ip = ip.to_string();
     spawn(async move {
         log("网络测试中...");
         set_step_status(app_handle.clone(), "eth_wait_connection", AppTestStatus::Success);
@@ -211,8 +212,8 @@ pub fn spawn_step2_net_testing(app_handle: AppHandle) {
         let download_speed_threshold = get_config_str("testing", "eth_down_speed").unwrap_or("500".to_string());
         
         // 测试命令
-        let upload_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh upload {} \"http://192.168.1.7:8080/upload\"", upload_speed_threshold);
-        let download_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh download {} \"http://192.168.1.7:8080/download\"", download_speed_threshold);
+        let upload_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh upload {} \"http://{}:8080/upload\"", upload_speed_threshold, ip);
+        let download_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh download {} \"http://{}:8080/download\"", download_speed_threshold, ip);
 
         log(&format!("上传测试命令：{}", upload_test_cmd));
         log(&format!("下载测试命令：{}", download_test_cmd));

@@ -2655,6 +2655,7 @@ dependencies = [
 name = "nanokvm_testing_v2"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bytes",
  "chrono",
  "futures",
@@ -2679,6 +2680,7 @@ dependencies = [
  "uuid",
  "warp",
  "whoami",
+ "wifidirect-legacy-ap",
  "winapi",
  "windows 0.54.0",
 ]
@@ -5749,6 +5751,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wifidirect-legacy-ap"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ea14dc197a28ff70719c7fc3ed29a752f2758ec399360b845cb9e0e92b8c4b0"
+dependencies = [
+ "windows 0.44.0",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5792,6 +5803,15 @@ dependencies = [
  "raw-window-handle",
  "windows-sys 0.59.0",
  "windows-version",
+]
+
+[[package]]
+name = "windows"
+version = "0.44.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e745dab35a0c4c77aa3ce42d595e13d2003d6902d6b08c9ef5fc326d08da12b"
+dependencies = [
+ "windows-targets 0.42.2",
 ]
 
 [[package]]
