@@ -15,6 +15,7 @@ const HDMI_EDID_TEST_MAX_RETRY_COUNT: u64 = 3;
 const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_UPLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
+const WIFI_CONNECT_MAX_RETRY_COUNT: u64 = 5;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -118,7 +119,7 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         let mut lt86102_i2c_io: bool = true;
 
         // 先启动vin_test
-        spawn(async move {
+        spawn(async {
             log("启动vin_test测试服务");
             let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh start").await;
             log("vin_test测试服务退出");
@@ -200,34 +201,72 @@ pub fn spawn_step2_usb_testing(app_handle: AppHandle) {
     });
 }
 
-pub fn spawn_step2_net_testing(app_handle: AppHandle, ip: &str) {
+pub fn spawn_step2_eth_testing(app_handle: AppHandle, ip: &str) {
     let ip = ip.to_string();
     spawn(async move {
         log("网络测试中...");
         set_step_status(app_handle.clone(), "eth_wait_connection", AppTestStatus::Success);
-        let handle = spawn_file_server_task();     // 启动文件服务器任务
-        log("文件服务器任务已启动");
+
         // 获取阈值
         let upload_speed_threshold = get_config_str("testing", "eth_up_speed").unwrap_or("300".to_string());
         let download_speed_threshold = get_config_str("testing", "eth_down_speed").unwrap_or("500".to_string());
         
         // 测试命令
         let upload_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh upload {} \"http://{}:8080/upload\"", upload_speed_threshold, ip);
-        let download_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh download {} \"http://{}:8080/download\"", download_speed_threshold, ip);
+        let download_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/07_eth_test.sh download {} \"http://{}:8080/download_small\"", download_speed_threshold, ip);
 
-        log(&format!("上传测试命令：{}", upload_test_cmd));
-        log(&format!("下载测试命令：{}", download_test_cmd));
+        log(&format!("eth上传测试命令：{}", upload_test_cmd));
+        log(&format!("eth下载测试命令：{}", download_test_cmd));
         
         // 测试上传
         let _ = auto_test_with_retry(&app_handle, "eth_upload_test", &upload_test_cmd, "ETH upload test passed", ETH_UPLOAD_TEST_MAX_RETRY_COUNT).await;
         // 测试下载
         let _ = auto_test_with_retry(&app_handle, "eth_download_test", &download_test_cmd, "ETH download test passed", ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT).await;
 
-        handle.abort();
         sleep(Duration::from_secs(1)).await;
     });
 }
 
+
+pub fn spawn_step2_wifi_testing(app_handle: AppHandle, ssid: &str, password: &str) {
+    let ssid = ssid.to_string();
+    let password = password.to_string();
+    spawn(async move {
+        log("等待wifi连接...");
+        let connect_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/08_wifi_test.sh connect {} {}", ssid, password);
+        let (wifi_connect_result, wifi_connect_output) = auto_test_with_retry(&app_handle, "wifi_wait_connection", &connect_test_cmd, "WiFi connect passed", WIFI_CONNECT_MAX_RETRY_COUNT).await;
+        if wifi_connect_result {
+            // 连接成功
+            let mut target_ip = String::new();
+            if let Some(start) = wifi_connect_output.find("DHCP服务器IP: ") {
+                let content_start = start + "DHCP服务器IP: ".len();
+                let remaining = &wifi_connect_output[content_start..];
+                if let Some(end) = remaining.find('\n') {
+                    let ip = &remaining[..end].trim();
+                    log(&format!("RUST检测到当前板卡的IP为: {}", ip));
+                    target_ip = ip.to_string();
+                }
+            }
+            // 获取阈值
+            let upload_speed_threshold = get_config_str("testing", "wifi_up_speed").unwrap_or("10".to_string());
+            let download_speed_threshold = get_config_str("testing", "wifi_down_speed").unwrap_or("10".to_string());
+            
+            // 测试命令
+            let upload_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/08_wifi_test.sh upload {} \"http://{}:8080/upload\"", upload_speed_threshold, target_ip);
+            let download_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/08_wifi_test.sh download {} \"http://{}:8080/download_small\"", download_speed_threshold, target_ip);
+
+            log(&format!("wifi上传测试命令：{}", upload_test_cmd));
+            log(&format!("wifi下载测试命令：{}", download_test_cmd));
+            
+            // 测试上传
+            let _ = auto_test_with_retry(&app_handle, "wifi_upload_test", &upload_test_cmd, "WiFi upload test passed", ETH_UPLOAD_TEST_MAX_RETRY_COUNT).await;
+            // 测试下载
+            let _ = auto_test_with_retry(&app_handle, "wifi_download_test", &download_test_cmd, "WiFi download test passed", ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT).await;
+        } else {
+            log(&format!("wifi连接失败，输出: {}", wifi_connect_output));
+        }
+    });
+}
 
 // pub fn spawn_step2_file_update(app_handle: AppHandle) {
 //     spawn(async move {

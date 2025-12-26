@@ -279,10 +279,10 @@ machine_number = "0"    # 用于设置测试主机的唯一标识符，填写"1"
 board_version = "F"     # 测试板版本，填写板子识别编号字母位，如板子编号为30126F，则填写"F"
 desktop_mode = "dark"   # 桌面默认模式，可选 "light" 或 "dark"
 eth_mod = "static"      # 以太网模式，可选 "static" 或 "router"，用以选择是否网线直连待测主机
-eth_up_speed = 700      # 测试以太网上传速度，单位Mbps
-eth_down_speed = 700    # 测试以太网下载速度，单位Mbps
-wifi_up_speed = 20      # 测试WiFi上传速度，单位Mbps
-wifi_down_speed = 20    # 测试WiFi下载速度，单位Mbps
+eth_up_speed = 300      # 测试以太网上传速度，单位Mbps
+eth_down_speed = 500    # 测试以太网下载速度，单位Mbps
+wifi_up_speed = 10      # 测试WiFi上传速度，单位Mbps
+wifi_down_speed = 10    # 测试WiFi下载速度，单位Mbps
 
 # 注意：修改配置后需要重启应用程序生效
 "#,

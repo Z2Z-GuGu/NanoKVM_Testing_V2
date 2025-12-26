@@ -27,6 +27,11 @@ pub fn spawn_file_server_task() -> JoinHandle<()> {
             .and(warp::query::<DownloadParams>())
             .and_then(download_handler);
 
+        // 10MB测试数据路由
+        let download_small = warp::path("download_small")
+            .and(warp::get())
+            .and_then(download_small_handler);
+
         // 上传路由
         let upload = warp::path("upload")
             .and(warp::post())
@@ -35,11 +40,12 @@ pub fn spawn_file_server_task() -> JoinHandle<()> {
 
         // 组合路由
         let routes = download
+            .or(download_small)
             .or(upload)
             .with(warp::cors().allow_any_origin());
 
         // warp::serve(routes).run(([192, 168, 1, 7], 8080)).await;
-        warp::serve(routes).run(([192, 168, 2, 201], 8080)).await;
+        warp::serve(routes).run(([0, 0, 0, 0], 8080)).await;    // 所有地址
     })
 }
 
@@ -96,4 +102,20 @@ async fn upload_handler(
         "success": true,
         "message": "上传完成"
     })))
+}
+
+// 10MB测试数据下载处理
+async fn download_small_handler() -> Result<impl warp::Reply, warp::Rejection> {
+    log("📥 开始小文件测试数据下载...");
+    
+    // 生成5MB的零数据
+    let size_mb = 5;
+    let total_bytes = size_mb * 1024 * 1024;
+    
+    // 创建10MB的零数据向量
+    let data = vec![0u8; total_bytes];
+    
+    log(&format!("✅ 小文件测试数据生成完成，大小: {} 字节", total_bytes));
+    
+    Ok(data)
 }

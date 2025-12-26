@@ -24,9 +24,9 @@ pub enum AppStep1Status {
     Booting             = 4,  // 已连接KVM，开机中
     BootedLogin         = 5,  // 已连接KVM，已开机（现在出现login）
     LoggedIn            = 6,  // 已连接KVM，已登录（现在出现:~#）
-    Download_File       = 7,  // 下载文件中
-    Checking_Hardware   = 8,  // 检查硬件中
-    Checking_EMMC       = 9,  // 检查eMMC中
+    DownloadFile       = 7,  // 下载文件中
+    CheckingHardware   = 8,  // 检查硬件中
+    CheckingEmmc       = 9,  // 检查eMMC中
     Printing            = 10, // 打印中
     Finished            = 11, // 完成
 }

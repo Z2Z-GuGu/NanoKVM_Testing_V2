@@ -25,6 +25,8 @@ fn log(msg: &str) {
 pub fn spawn_setup_task(app_handle: AppHandle) {
     thread::spawn(move || {
         log("初始化线程已启动");
+        let mut ap_ssid = String::new();
+        let mut ap_password = String::new();
         
         // 初始化AppDate
         let app_name = "NanoKVM-Testing";
@@ -85,6 +87,8 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             let password = "nanokvmwifi";
             log(&format!("初始化WiFi热点: {} {}", ssid, password));
             let wifi_ap_controller = spawn_wifi_ap(&ssid, &password);
+            ap_ssid = ssid;
+            ap_password = password.to_string();
         }
         // wifi.sh connect_start NanoKVM_WiFi_Test_1 nanokvmwifi
 
@@ -175,7 +179,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             }
         }
         // serial_data_management_task(app_handle.clone());
-        spawn_app_step1_task(app_handle.clone());
+        spawn_app_step1_task(app_handle.clone(), ap_ssid.clone(), ap_password.clone());
         // 启动测试任务线程后直接退出线程
         // spawn_test_task(app_handle.clone());
         // spawn_app_step1_task(app_handle.clone());

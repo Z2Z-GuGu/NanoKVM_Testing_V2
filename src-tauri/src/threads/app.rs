@@ -12,7 +12,7 @@ use crate::threads::ssh::ssh_execute_command;
 use crate::threads::save::{get_config_str, create_serial_number};
 use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
 use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
-    spawn_step2_usb_testing, spawn_step2_net_testing};
+    spawn_step2_usb_testing, spawn_step2_eth_testing, spawn_step2_wifi_testing};
 
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 
@@ -30,8 +30,10 @@ fn log(msg: &str) {
 //     pub static ref APP_STEP1_STATUS: Mutex<AppStep1Status> = Mutex::new(AppStep1Status::Unconnected);    // 应用步骤1状态全局变量
 // }
 
-pub fn spawn_app_step1_task(app_handle: AppHandle) {
+pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: String) {
     spawn(async move {
+        let ssid = ssid;
+        let password = password;
         let mut app_step1_status = AppStep1Status::Unconnected;
         let mut current_step = app_step1_status.clone();
         let mut not_connected_kvm_count = 0;
@@ -238,9 +240,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     // }
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
                     set_target_ip(app_handle.clone(), "172.168.100.2");
-                    app_step1_status = AppStep1Status::Download_File;  // 下载文件中
+                    app_step1_status = AppStep1Status::DownloadFile;  // 下载文件中
                 }
-                AppStep1Status::Download_File => {  // 下载文件中
+                AppStep1Status::DownloadFile => {  // 下载文件中
                     log("下载文件中");
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Testing);
                     // 检测文件是否存在：curl "http://192.168.2.201:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
@@ -254,7 +256,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                         if response == "NO" {
                             log("用户选择了不重新下载");
                             set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
-                            app_step1_status = AppStep1Status::Checking_Hardware;  // 未连接KVM
+                            app_step1_status = AppStep1Status::CheckingHardware;  // 未连接KVM
                             continue;
                         } else {
                             log("用户选择了重新下载");
@@ -279,9 +281,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     let _ = execute_command_and_wait("sudo chmod -R +x /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
                     
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
-                    app_step1_status = AppStep1Status::Checking_Hardware;  // 检查硬件中
+                    app_step1_status = AppStep1Status::CheckingHardware;  // 检查硬件中
                 }
-                AppStep1Status::Checking_Hardware => {  // 检查硬件中
+                AppStep1Status::CheckingHardware => {  // 检查硬件中
                     log("检查硬件中");
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Testing);
 
@@ -370,9 +372,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                     }
 
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
-                    app_step1_status = AppStep1Status::Checking_EMMC;  // 检查eMMC中
+                    app_step1_status = AppStep1Status::CheckingEmmc;  // 检查eMMC中
                 }
-                AppStep1Status::Checking_EMMC => {  // 检查eMMC中
+                AppStep1Status::CheckingEmmc => {  // 检查eMMC中
                     log("检查eMMC中");
                     set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Testing);
 
@@ -433,17 +435,18 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) {
                 }
                 AppStep1Status::Finished => {  // 完成
                     log("Step1完成，启动Step2内容");
-                    handle.abort();  // 下载完成后，终止文件服务器任务
                     spawn_step2_file_update(app_handle.clone());
                     spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
                     spawn_step2_usb_testing(app_handle.clone());
-                    spawn_step2_net_testing(app_handle.clone(), "192.168.2.201");
+                    spawn_step2_eth_testing(app_handle.clone(), "192.168.2.201");
+                    spawn_step2_wifi_testing(app_handle.clone(), &ssid, &password);
                     log("Step2启动完成");
 
                     loop {
                         log("sleep");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                     }
+                    handle.abort();  // 下载完成后+网速测试完成后，终止文件服务器任务
                 }
             }
             std::thread::sleep(Duration::from_millis(100));
