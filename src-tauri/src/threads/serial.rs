@@ -1,5 +1,6 @@
 use serialport::{SerialPortType};
 use tokio_serial::{SerialStream, new, SerialPortBuilderExt};
+use tokio_serial::SerialPort; // 引入特质以使用 DTR/RTS 方法
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -163,6 +164,7 @@ pub fn serial_management_task() {
     spawn(async move {
         let mut serial_port: Option<Arc<Mutex<SerialStream>>> = None;
         let mut serial_connect_err_count = 0;
+        let mut io_value: bool = true;
         clear_slide_filter().await;
         
         // 创建发送和接收队列
@@ -273,6 +275,13 @@ pub fn serial_management_task() {
                         DATA_DENSITY.store(density, Ordering::Relaxed);
                     }
                 }
+            }
+
+            // ctrl dtr&rts io
+            if let Ok(mut port_guard) = serial_port.as_ref().unwrap().try_lock() {
+                let _ = port_guard.write_data_terminal_ready(io_value);
+                let _ = port_guard.write_request_to_send(io_value);
+                io_value = !io_value;
             }
 
             // log(&format!("当前数据密度: {:?}", *DATA_DENSITY.lock().await));

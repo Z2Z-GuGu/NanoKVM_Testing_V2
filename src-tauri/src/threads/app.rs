@@ -13,7 +13,8 @@ use crate::threads::save::{get_config_str, create_serial_number};
 use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
 use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
     spawn_step2_usb_testing, spawn_step2_eth_testing, spawn_step2_wifi_testing, 
-    spawn_step2_penal_testing, spawn_step2_ux_testing, spawn_step2_atx_testing};
+    spawn_step2_penal_testing, spawn_step2_ux_testing, spawn_step2_atx_testing,
+    spawn_step2_io_testing, spawn_step2_tf_testing};
 
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 
@@ -445,6 +446,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     spawn_step2_penal_testing(app_handle.clone());
                     spawn_step2_ux_testing(app_handle.clone());
                     spawn_step2_atx_testing(app_handle.clone());
+                    spawn_step2_io_testing(app_handle.clone());
+                    spawn_step2_tf_testing(app_handle.clone());
                     log("Step2启动完成");
 
                     loop {

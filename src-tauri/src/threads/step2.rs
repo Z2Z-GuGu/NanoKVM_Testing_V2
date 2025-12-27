@@ -17,7 +17,7 @@ const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_UPLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const WIFI_CONNECT_MAX_RETRY_COUNT: u64 = 5;
-const ATX_IO_TEST_MAX_RETRY_COUNT: u64 = 5;
+const ATX_IO_TF_TEST_MAX_RETRY_COUNT: u64 = 5;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -305,7 +305,23 @@ pub fn spawn_step2_ux_testing(app_handle: AppHandle) {
 
 pub fn spawn_step2_atx_testing(app_handle: AppHandle) {
     spawn(async move {        
-        let _ = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", ATX_IO_TEST_MAX_RETRY_COUNT).await;
+        let _ = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", ATX_IO_TF_TEST_MAX_RETRY_COUNT).await;
+
+        sleep(Duration::from_secs(1)).await;
+    });
+}
+
+pub fn spawn_step2_io_testing(app_handle: AppHandle) {
+    spawn(async move {        
+        let _ = auto_test_with_retry(&app_handle, "io", "/root/NanoKVM_Pro_Testing/test_sh/11_io_test.sh 10", "IO test passed", ATX_IO_TF_TEST_MAX_RETRY_COUNT).await;
+
+        sleep(Duration::from_secs(1)).await;
+    });
+}
+
+pub fn spawn_step2_tf_testing(app_handle: AppHandle) {
+    spawn(async move {        
+        let _ = auto_test_with_retry(&app_handle, "tf_card", "/root/NanoKVM_Pro_Testing/test_sh/12_tf_test.sh", "TF test passed", ATX_IO_TF_TEST_MAX_RETRY_COUNT).await;
 
         sleep(Duration::from_secs(1)).await;
     });
