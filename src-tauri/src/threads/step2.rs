@@ -7,6 +7,7 @@ use crate::threads::ssh::{ssh_execute_command_check_success, ssh_execute_command
 use crate::threads::camera::{get_camera_status, CameraStatus};
 use crate::threads::server::spawn_file_server_task;
 use crate::threads::save::get_config_str;
+use crate::threads::dialog_test::{show_dialog_and_wait};
 
 const HDMI_IO_TEST_MAX_RETRY_COUNT: u64 = 5;
 const HDMI_VIN_TEST_MAX_RETRY_COUNT: u64 = 5;
@@ -227,7 +228,6 @@ pub fn spawn_step2_eth_testing(app_handle: AppHandle, ip: &str) {
     });
 }
 
-
 pub fn spawn_step2_wifi_testing(app_handle: AppHandle, ssid: &str, password: &str) {
     let ssid = ssid.to_string();
     let password = password.to_string();
@@ -265,6 +265,40 @@ pub fn spawn_step2_wifi_testing(app_handle: AppHandle, ssid: &str, password: &st
         } else {
             log(&format!("wifi连接失败，输出: {}", wifi_connect_output));
         }
+    });
+}
+
+pub fn spawn_step2_penal_testing(app_handle: AppHandle) {
+    spawn(async move {
+        log("启动屏幕测试服务");
+        set_step_status(app_handle.clone(), "screen", AppTestStatus::Testing);
+        let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh lcd 60").await;
+        log("屏幕测试服务退出");
+        sleep(Duration::from_secs(1)).await;
+    });
+}
+
+pub fn spawn_step2_ux_testing(app_handle: AppHandle) {
+    spawn(async move {
+        // 弹窗主动判断测试是否完成
+        let response = show_dialog_and_wait(app_handle.clone(), "请查看屏幕是否闪烁".to_string(), vec![
+            serde_json::json!({ "text": "YES" }),
+            serde_json::json!({ "text": "NO" })
+        ]);
+        if response == "NO" {
+            set_step_status(app_handle.clone(), "screen", AppTestStatus::Failed);
+        } else {
+            set_step_status(app_handle.clone(), "screen", AppTestStatus::Success);
+        }
+        let _ = ssh_execute_command("kill $(cat /tmp/lcd.pid)").await;
+        // 等待弹窗消失500ms
+        // std::thread::sleep(Duration::from_millis(500));
+        // 测试触摸
+        let _ = auto_test_with_retry(&app_handle, "touch", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh touch 60", "Touch test passed", 1).await;
+        // 测试旋钮
+        let _ = auto_test_with_retry(&app_handle, "knob", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh rotary 60", "Rotary test passed", 1).await;
+        
+        sleep(Duration::from_secs(1)).await;
     });
 }
 
