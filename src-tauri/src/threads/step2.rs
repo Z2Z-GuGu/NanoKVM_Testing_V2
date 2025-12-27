@@ -17,6 +17,7 @@ const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_UPLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const WIFI_CONNECT_MAX_RETRY_COUNT: u64 = 5;
+const ATX_IO_TEST_MAX_RETRY_COUNT: u64 = 5;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -280,6 +281,8 @@ pub fn spawn_step2_penal_testing(app_handle: AppHandle) {
 
 pub fn spawn_step2_ux_testing(app_handle: AppHandle) {
     spawn(async move {
+        // 等待屏幕闪烁程序启动
+        sleep(Duration::from_secs(2)).await;
         // 弹窗主动判断测试是否完成
         let response = show_dialog_and_wait(app_handle.clone(), "请查看屏幕是否闪烁".to_string(), vec![
             serde_json::json!({ "text": "YES" }),
@@ -297,7 +300,13 @@ pub fn spawn_step2_ux_testing(app_handle: AppHandle) {
         let _ = auto_test_with_retry(&app_handle, "touch", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh touch 60", "Touch test passed", 1).await;
         // 测试旋钮
         let _ = auto_test_with_retry(&app_handle, "knob", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh rotary 60", "Rotary test passed", 1).await;
-        
+    });
+}
+
+pub fn spawn_step2_atx_testing(app_handle: AppHandle) {
+    spawn(async move {        
+        let _ = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", ATX_IO_TEST_MAX_RETRY_COUNT).await;
+
         sleep(Duration::from_secs(1)).await;
     });
 }
