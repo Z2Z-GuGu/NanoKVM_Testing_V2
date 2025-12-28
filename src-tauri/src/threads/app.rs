@@ -465,6 +465,14 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                             }
                                         }
                                     }
+                                    // 等待弹窗消失500ms
+                                    std::thread::sleep(Duration::from_millis(500));
+                                    let response = show_dialog_and_wait(app_handle.clone(), "已打印贴纸，请拔出NanoKVM Pro".to_string(), vec![
+                                        serde_json::json!({ "text": "已经拔出" })
+                                    ]);
+                                    // 等待弹窗消失500ms
+                                    std::thread::sleep(Duration::from_millis(500));
+                                    break;
                                 } else {
                                     log("用户选择了YES，重新检测eMMC");
                                     continue;
@@ -513,9 +521,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     let wifi_testing_handle = spawn_step2_wifi_testing(app_handle.clone(), &target_serial, &ssid, &password, wifi_exist);
                     let penal_testing_handle = spawn_step2_penal_testing(app_handle.clone(), target_hardware_type.clone());
                     let ux_testing_handle = spawn_step2_ux_testing(app_handle.clone(), &target_serial, target_hardware_type.clone(), auto_type);
-                    let atx_testing_handle = spawn_step2_atx_testing(app_handle.clone(), &target_serial);
+                    let atx_testing_handle = spawn_step2_atx_testing(app_handle.clone(), &target_serial, target_hardware_type.clone());
                     let io_testing_handle = spawn_step2_io_testing(app_handle.clone(), &target_serial);
-                    let tf_testing_handle = spawn_step2_tf_testing(app_handle.clone(), &target_serial);
+                    let tf_testing_handle = spawn_step2_tf_testing(app_handle.clone(), &target_serial, target_hardware_type.clone());
                     let uart_testing_handle = spawn_step2_uart_testing(app_handle.clone(), &target_serial, target_hardware_type.clone());
                     log("Step2启动完成");
 

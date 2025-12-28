@@ -449,16 +449,27 @@ pub fn spawn_step2_ux_testing(app_handle: AppHandle, target_serial: &str, hardwa
     })
 }
 
-pub fn spawn_step2_atx_testing(app_handle: AppHandle, target_serial: &str) -> JoinHandle<()> {
+pub fn spawn_step2_atx_testing(app_handle: AppHandle, target_serial: &str, hardware_type: HardwareType) -> JoinHandle<()> {
     let serial = target_serial.to_string();
-    spawn(async move {        
-        let (atx_test_result, atx_test_output) = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", IO_TEST_MAX_RETRY_COUNT).await;
-        if !atx_test_result {
-            log(&format!("atx_test失败，输出: {}", atx_test_output));
-            add_error_msg("ATX IO异常 | ");
-            let _ = set_test_status(&serial, "atx", "Damage");
+    spawn(async move {
+        if hardware_type == HardwareType::Atx {
+            let (atx_test_result, atx_test_output) = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh atx", "ATX test passed", IO_TEST_MAX_RETRY_COUNT).await;
+            if !atx_test_result {
+                log(&format!("atx_test失败，输出: {}", atx_test_output));
+                add_error_msg("ATX IO异常 | ");
+                let _ = set_test_status(&serial, "atx", "Damage");
+            } else {
+                let _ = set_test_status(&serial, "atx", "Normal");
+            }
         } else {
-            let _ = set_test_status(&serial, "atx", "Normal");
+            let (atx_test_result, atx_test_output) = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", IO_TEST_MAX_RETRY_COUNT).await;
+            if !atx_test_result {
+                log(&format!("atx_test失败，输出: {}", atx_test_output));
+                add_error_msg("ATX IO异常 | ");
+                let _ = set_test_status(&serial, "atx", "Damage");
+            } else {
+                let _ = set_test_status(&serial, "atx", "Normal");
+            }
         }
         
         // 等待1秒，确保ATX测试完成
@@ -483,16 +494,21 @@ pub fn spawn_step2_io_testing(app_handle: AppHandle, target_serial: &str) -> Joi
     })
 }
 
-pub fn spawn_step2_tf_testing(app_handle: AppHandle, target_serial: &str) -> JoinHandle<()> {
+pub fn spawn_step2_tf_testing(app_handle: AppHandle, target_serial: &str, hardware_type: HardwareType) -> JoinHandle<()> {
     let serial = target_serial.to_string();
-    spawn(async move {        
-        let (tf_test_result, tf_test_output) = auto_test_with_retry(&app_handle, "tf_card", "/root/NanoKVM_Pro_Testing/test_sh/12_tf_test.sh", "TF test passed", IO_TEST_MAX_RETRY_COUNT).await;
-        if !tf_test_result {
-            log(&format!("tf_test失败，输出: {}", tf_test_output));
-            add_error_msg("TF卡，检查SDIO相关器件/测试卡是否损坏 | ");
-            let _ = set_test_status(&serial, "sdcard", "Damage");
+    spawn(async move {
+        if hardware_type == HardwareType::Atx {
+            set_step_status(app_handle.clone(), "sdcard", AppTestStatus::Hidden);
+            let _ = set_test_status(&serial, "sdcard", "No hardware");
         } else {
-            let _ = set_test_status(&serial, "sdcard", "Normal");
+            let (tf_test_result, tf_test_output) = auto_test_with_retry(&app_handle, "tf_card", "/root/NanoKVM_Pro_Testing/test_sh/12_tf_test.sh", "TF test passed", IO_TEST_MAX_RETRY_COUNT).await;
+            if !tf_test_result {
+                log(&format!("tf_test失败，输出: {}", tf_test_output));
+                add_error_msg("TF卡，检查SDIO相关器件/测试卡是否损坏 | ");
+                let _ = set_test_status(&serial, "sdcard", "Damage");
+            } else {
+                let _ = set_test_status(&serial, "sdcard", "Normal");
+            }
         }
         
         // 等待1秒，确保TF测试完成

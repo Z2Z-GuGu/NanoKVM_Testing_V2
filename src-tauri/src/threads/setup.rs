@@ -143,7 +143,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 log("USB工具已连接");
             } else {
                 log("USB工具未连接");
-                warning_msg.push_str("⚠️ USB测试工具未连接，请将USB测试工具连接至本机\n");
+                warning_msg.push_str("⚠️ USB测试工具未连接或正在占用，请将USB测试工具连接至本机或关闭占用软件\n");
             }
             
             // 检查打印机是否连接
