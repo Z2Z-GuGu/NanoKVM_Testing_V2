@@ -1,0 +1,4 @@
+fbdev: /dev/fb0
+touch: /dev/input/by-path/platform-4857000.i2c-event
+rotary: /dev/input/by-path/platform-rotary@0-event
+key: /dev/input/by-path/platform-gpio_keys-event
