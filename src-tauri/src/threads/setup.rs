@@ -1,6 +1,6 @@
 use std::thread;
 use tokio::time::sleep;
-use tauri::async_runtime::{spawn, JoinHandle};
+use tauri::async_runtime::{spawn};
 use std::time::Duration;
 use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty, set_test_status};
 use crate::threads::serial::{is_usb_tool_connected};
@@ -11,8 +11,9 @@ use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
 use tauri::{AppHandle, Emitter};
 use tokio;
 use crate::threads::app::spawn_app_step1_task;
-use crate::threads::update_state::{set_server_state, set_upload_count};
+use crate::threads::update_state::{set_upload_count};
 use crate::threads::wifi_ap::spawn_wifi_ap;
+use crate::threads::static_eth::{set_static_ip_for_testing, STATIC_IP_ENABLE};
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -35,6 +36,8 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         log("初始化线程已启动");
         let mut ap_ssid = String::new();
         let mut ap_password = String::new();
+        let static_ip = "172.168.100.1";
+        let target_ip = "172.168.100.2";
         
         // 初始化AppDate
         let app_name = "NanoKVM-Testing";
@@ -89,13 +92,21 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                 thread::sleep(Duration::from_millis(100));
             }
         }
+
+        // 初始化静态IP
+        if STATIC_IP_ENABLE {
+            log("初始化静态IP");
+            if let Err(e) = set_static_ip_for_testing(static_ip) {
+                log(&format!("静态IP配置失败: {}", e));
+            }
+        }
         
         // 初始化wifi-ap
         if let Some(ap_number) = &machine_number {
             let ssid = format!("NanoKVM_WiFi_Test_{}", ap_number);
             let password = "nanokvmwifi";
             log(&format!("初始化WiFi热点: {} {}", ssid, password));
-            let wifi_ap_controller = spawn_wifi_ap(&ssid, &password);
+            let _ = spawn_wifi_ap(&ssid, &password);
             ap_ssid = ssid;
             ap_password = password.to_string();
         }
@@ -165,7 +176,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         }
         // serial_data_management_task(app_handle.clone());
         loop {
-            let app_step_handle = spawn_app_step1_task(app_handle.clone(), ap_ssid.clone(), ap_password.clone());
+            let app_step_handle = spawn_app_step1_task(app_handle.clone(), ap_ssid.clone(), ap_password.clone(), static_ip.to_string(), target_ip.to_string());
             app_step_handle.await.unwrap();
         }
 

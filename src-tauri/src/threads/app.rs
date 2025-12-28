@@ -16,6 +16,7 @@ use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing,
     spawn_step2_penal_testing, spawn_step2_ux_testing, spawn_step2_atx_testing,
     spawn_step2_io_testing, spawn_step2_tf_testing, spawn_step2_uart_testing, 
     HardwareType, spawn_step3_test_end, spawn_step2_app_install};
+use crate::threads::static_eth::STATIC_IP_ENABLE;
 
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 
@@ -33,8 +34,10 @@ fn log(msg: &str) {
 //     pub static ref APP_STEP1_STATUS: Mutex<AppStepStatus> = Mutex::new(AppStepStatus::Unconnected);    // 应用步骤1状态全局变量
 // }
 
-pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: String) -> JoinHandle<()> {
+pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: String, static_ip: String, target_ip: String) -> JoinHandle<()> {
     spawn(async move {
+        let current_static_ip = static_ip;
+        let current_target_ip = target_ip;
         let ssid = ssid;
         let password = password;
         let mut app_step1_status = AppStepStatus::Unconnected;
@@ -206,45 +209,58 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Testing);
-                    // 不连接测试主机时需要注释
-                    // if ! execute_command_and_wait("sudo pkill dhclient\n", ":~#", 1000).await { 
-                    //     log("关闭DHCP超时");
-                    //     // ##
-                    // }
-                    // // 清空ip
-                    // log("清空ip");
-                    // if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
-                    //     log("清空ip超时");
-                    //     // ##
-                    // };
-                    // // 设置静态IP
-                    // log("设置静态IP");
-                    // if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
-                    //     log("设置静态IP超时");
-                    //     // ##
-                    // };
-                    // while ! execute_command_and_wait("ping -c 1 172.168.100.1\n", "1 received", 1000).await {
-                    //     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Repairing);
-                    //     log("需要发送CTRL C确保退出ping");
-                    //     if ! execute_command_and_wait("\x03", ":~#", 1000).await {
-                    //         log("CTRL+C超时");
-                    //         // ##
-                    //     };
-                    //     // 清空ip
-                    //     log("清空ip");
-                    //     if ! execute_command_and_wait("sudo ip addr flush dev eth0\n", ":~#", 1000).await {
-                    //         log("清空ip超时");
-                    //         // ##
-                    //     };
-                    //     // 设置静态IP
-                    //     log("设置静态IP");
-                    //     if ! execute_command_and_wait("sudo ip addr add 172.168.100.2/24 dev eth0\n", ":~#", 1000).await { 
-                    //         log("设置静态IP超时");
-                    //         // ##
-                    //     };
-                    // }
+                    if STATIC_IP_ENABLE {
+                        if ! execute_command_and_wait("pkill dhclient\n", ":~#", 1000).await { 
+                            log("关闭DHCP超时");
+                            // ##
+                        }
+                        // 清空ip
+                        log("清空ip");
+                        if ! execute_command_and_wait("ip addr flush dev eth0\n", ":~#", 1000).await {
+                            log("清空ip超时");
+                            // ##
+                        };
+                        // 设置静态IP
+                        log(&format!("设置静态IP: {}", current_static_ip));
+                        if ! execute_command_and_wait(&format!("ip addr add {} dev eth0\n", current_target_ip), ":~#", 1000).await { 
+                            log("设置静态IP超时");
+                            // ##
+                        };
+                        // 配置对方路由
+                        log(&format!("配置对方路由: {}", current_static_ip));
+                        if ! execute_command_and_wait(&format!("ip route add {} dev eth0\n", current_static_ip), ":~#", 1000).await { 
+                            log("配置对方路由超时");
+                            // ##
+                        };
+                        while ! execute_command_and_wait(&format!("ping -c 1 {}\n", current_static_ip), "1 received", 1000).await {
+                            set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Repairing);
+                            log("需要发送CTRL C确保退出ping");
+                            if ! execute_command_and_wait("\x03", ":~#", 1000).await {
+                                log("CTRL+C超时");
+                                // ##
+                            };
+                            // 清空ip
+                            log("清空ip");
+                            if ! execute_command_and_wait("ip addr flush dev eth0\n", ":~#", 1000).await {
+                                log("清空ip超时");
+                                // ##
+                            };
+                            // 设置静态IP
+                            log("设置静态IP");
+                            if ! execute_command_and_wait(&format!("ip addr add {} dev eth0\n", current_target_ip), ":~#", 1000).await { 
+                                log("设置静态IP超时");
+                                // ##
+                            };
+                            // 配置对方路由
+                            log(&format!("配置对方路由: {}", current_static_ip));
+                            if ! execute_command_and_wait(&format!("ip route add {} dev eth0\n", current_static_ip), ":~#", 1000).await { 
+                                log("配置对方路由超时");
+                                // ##
+                            };
+                        }
+                    }
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
-                    set_target_ip(app_handle.clone(), "172.168.100.2");
+                    set_target_ip(app_handle.clone(), &current_target_ip);
                     app_step1_status = AppStepStatus::DownloadFile;  // 下载文件中
                 }
                 AppStepStatus::DownloadFile => {  // 下载文件中
@@ -273,10 +289,20 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     log("删除旧文件");
                     let _ = execute_command_and_wait("rm -rf /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
                     
-                    log("开始下载");
-                    std::thread::sleep(Duration::from_secs(2));                 // 等待文件服务器启动
-                    // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                    let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                    while execute_command_and_wait("ls /root/test.tar\n", "cannot", 500).await {
+                        let _ = execute_command_and_wait(" ", ":~#", 500).await;
+                        log("开始下载");
+                        std::thread::sleep(Duration::from_secs(1));
+                        // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
+                        if STATIC_IP_ENABLE {
+                            let _ = execute_command_and_wait("curl \"http://172.168.100.1:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                            // let _ = execute_command_and_wait(&format!("curl \"http://{}:8080/download\" --output /root/test.tar -s -o /dev/null \n", current_target_ip), ":~#", 2000).await;
+                        } else {
+                            let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
+                        }
+                    }
+                    
+                    // let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
                     // let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
                     
                     log("找到文件,正在解压");
@@ -460,7 +486,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     let app_install_handle = spawn_step2_app_install(app_handle.clone());
                     let hdmi_testing_handle = spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
                     let usb_testing_handle = spawn_step2_usb_testing(app_handle.clone());
-                    let eth_testing_handle = spawn_step2_eth_testing(app_handle.clone(), "192.168.1.7");
+                    let eth_testing_handle = spawn_step2_eth_testing(app_handle.clone(), &current_static_ip);
                     // spawn_step2_eth_testing(app_handle.clone(), "192.168.1.7");
                     let wifi_testing_handle = spawn_step2_wifi_testing(app_handle.clone(), &ssid, &password, wifi_exist);
                     let penal_testing_handle = spawn_step2_penal_testing(app_handle.clone(), target_hardware_type.clone());

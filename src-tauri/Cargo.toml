@@ -50,3 +50,4 @@ windows = { version = "0.54", features = [
 wifidirect-legacy-ap = "0.3.0"
 anyhow = "1.0"
 once_cell = "1.19"
+ipconfig = "0.2"

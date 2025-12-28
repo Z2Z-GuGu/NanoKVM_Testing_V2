@@ -11,3 +11,4 @@ pub mod ssh;
 pub mod step2;
 pub mod hdmi;
 pub mod wifi_ap;
+pub mod static_eth;

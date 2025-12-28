@@ -5,7 +5,8 @@ use tokio::task;
 
 // const HOST: &str = "192.168.1.109";
 // const HOST: &str = "192.168.1.15";
-const HOST: &str = "192.168.1.19";
+// const HOST: &str = "192.168.1.19";
+const HOST: &str = "172.168.100.2";
 const USER: &str = "root";
 const PASSWORD: &str = "sipeed"; // 密码认证
 
