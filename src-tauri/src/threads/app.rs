@@ -1,11 +1,11 @@
 use std::time::Duration;
-use tauri::async_runtime::spawn;
+use tauri::async_runtime::{spawn, JoinHandle};
 use tauri::{AppHandle};
 use crate::threads::serial::{
     is_usb_tool_connected, get_current_data_density, 
     serial_send, detect_serial_string, execute_command_and_wait};
 use crate::threads::dialog_test::{show_dialog_and_wait};
-use crate::threads::update_state::{AppStep1Status, AppTestStatus, 
+use crate::threads::update_state::{AppStepStatus, AppTestStatus, 
     set_step_status, clean_step1_status, set_target_ip, set_current_hardware, set_target_serial};
 use crate::threads::server::spawn_file_server_task;
 use crate::threads::ssh::ssh_execute_command;
@@ -14,7 +14,8 @@ use crate::threads::printer::{is_printer_connected, generate_image_with_params, 
 use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
     spawn_step2_usb_testing, spawn_step2_eth_testing, spawn_step2_wifi_testing, 
     spawn_step2_penal_testing, spawn_step2_ux_testing, spawn_step2_atx_testing,
-    spawn_step2_io_testing, spawn_step2_tf_testing};
+    spawn_step2_io_testing, spawn_step2_tf_testing, spawn_step2_uart_testing, 
+    HardwareType, spawn_step3_test_end, spawn_step2_app_install};
 
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 
@@ -29,34 +30,36 @@ fn log(msg: &str) {
 }
 
 // lazy_static! {
-//     pub static ref APP_STEP1_STATUS: Mutex<AppStep1Status> = Mutex::new(AppStep1Status::Unconnected);    // 应用步骤1状态全局变量
+//     pub static ref APP_STEP1_STATUS: Mutex<AppStepStatus> = Mutex::new(AppStepStatus::Unconnected);    // 应用步骤1状态全局变量
 // }
 
-pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: String) {
+pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: String) -> JoinHandle<()> {
     spawn(async move {
         let ssid = ssid;
         let password = password;
-        let mut app_step1_status = AppStep1Status::Unconnected;
+        let mut app_step1_status = AppStepStatus::Unconnected;
         let mut current_step = app_step1_status.clone();
         let mut not_connected_kvm_count = 0;
         let mut target_serial = String::new();
         let mut target_name = String::new();
         let mut target_type = String::new();
         let mut wifi_exist = false;
-        let handle = spawn_file_server_task();     // 启动文件服务器任务
+        let mut target_hardware_type = HardwareType::Desk;
+        let mut soc_id = String::new();
+        let file_server_handle = spawn_file_server_task();     // 启动文件服务器任务
         loop {
             // 每轮一定要检测的内容：
             if !is_usb_tool_connected().await {
-                app_step1_status = AppStep1Status::Unconnected;
+                app_step1_status = AppStepStatus::Unconnected;
             }
             // 需要以下两个事情：
             // 1. 记录变更，貌似不一定非要记录所有变更，只要是不同状态下进入ConnectedNoKVM就清零计数
             // 2. 如果未连接要再次连接
             // 3. 未知状态其实是暂态，进去一次很快会出来，所以不作为前端的状态变更和后端的时间计数
             if current_step != app_step1_status.clone() {
-                if current_step != AppStep1Status::ConnectedNoKVM && 
-                   current_step != AppStep1Status::Uncertain &&
-                   app_step1_status == AppStep1Status::ConnectedNoKVM {
+                if current_step != AppStepStatus::ConnectedNoKVM && 
+                   current_step != AppStepStatus::Uncertain &&
+                   app_step1_status == AppStepStatus::ConnectedNoKVM {
                     not_connected_kvm_count = 0;
                 }
                 current_step = app_step1_status.clone();
@@ -65,7 +68,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
             // 检测数据密度
             log(&format!("当前应用步骤1状态: {:?}", app_step1_status));
             match app_step1_status {
-                AppStep1Status::Unconnected => {  // 未连接工具
+                AppStepStatus::Unconnected => {  // 未连接工具
                     log("未连接工具, 进入检测步骤");
                     clean_step1_status(app_handle.clone());
                     if !is_usb_tool_connected().await {
@@ -77,12 +80,12 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                         std::thread::sleep(Duration::from_millis(500));
                     } else {
                         log("已连接工具, 转移状态");
-                        app_step1_status = AppStep1Status::ConnectedNoKVM;
+                        app_step1_status = AppStepStatus::ConnectedNoKVM;
                         std::thread::sleep(Duration::from_secs(2));
                     }
                     continue;
                 }
-                AppStep1Status::ConnectedNoKVM => {  // 已连接工具, 未连接KVM
+                AppStepStatus::ConnectedNoKVM => {  // 已连接工具, 未连接KVM
                     clean_step1_status(app_handle.clone());
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Testing);
 
@@ -102,13 +105,13 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     let current_data_density = get_current_data_density().await;
                     log(&format!("当前数据密度: {:?}", current_data_density));
                     if current_data_density == 0 {
-                        app_step1_status = AppStep1Status::Uncertain;           // 进入不确定状态
+                        app_step1_status = AppStepStatus::Uncertain;           // 进入不确定状态
                     } else {
-                        app_step1_status = AppStep1Status::Booting;             // 进入开机中状态
+                        app_step1_status = AppStepStatus::Booting;             // 进入开机中状态
                     }
                     continue;
                 }
-                AppStep1Status::Uncertain => {  // 状态不确定
+                AppStepStatus::Uncertain => {  // 状态不确定
                     log("状态不确定, 发送换行符");
                     serial_send("\n").await;
                     std::thread::sleep(Duration::from_millis(100));
@@ -118,39 +121,39 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     match result.as_str() {
                         "login" => {
                             log("检测到login, 进入开机中状态");
-                            app_step1_status = AppStep1Status::BootedLogin;  // 已连接KVM，已开机（现在出现login）
+                            app_step1_status = AppStepStatus::BootedLogin;  // 已连接KVM，已开机（现在出现login）
                         }
                         ":~#" => {
                             log("检测到:~#, 进入已登录状态");
-                            app_step1_status = AppStep1Status::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
+                            app_step1_status = AppStepStatus::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
                         }
                         "AXERA-UBOOT=>" => {
                             log("检测到AXERA-UBOOT=>, 进入BOOT状态");
-                            app_step1_status = AppStep1Status::Booted;  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
+                            app_step1_status = AppStepStatus::Booted;  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
                         }
                         "UNMATCHED" => {
                             log("检测到UNMATCHED, 进入开机中状态");
-                            app_step1_status = AppStep1Status::Booting;  // 已连接KVM，开机中
+                            app_step1_status = AppStepStatus::Booting;  // 已连接KVM，开机中
                         }
                         "NO-DATA" => {
                             log("检测到NO-DATA, 进入未连接KVM状态");
-                            app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                            app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         }
                         _ => {
                             log(&format!("其他情况: {}", result));
-                            app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                            app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         }
                     }
                 }
-                AppStep1Status::Booted => {  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
+                AppStepStatus::Booted => {  // 已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）
                     log("已连接KVM，不慎进入BOOT（现在出现AXERA-UBOOT=>，输入boot\n）, 发送boot\n");
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Testing);
                     serial_send("boot\n").await;
                     std::thread::sleep(Duration::from_millis(100));
-                    app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                    app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                 }
-                AppStep1Status::Booting => {  // 已连接KVM，开机中
+                AppStepStatus::Booting => {  // 已连接KVM，开机中
                     log("已连接KVM，开机中, 等待login...");
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Testing);
@@ -158,47 +161,47 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     let result = detect_serial_string(&patterns, 30000, 10).await;
                     match result.as_str() {
                         "login" => {
-                            app_step1_status = AppStep1Status::BootedLogin;  // 已连接KVM，已开机（现在出现login）
+                            app_step1_status = AppStepStatus::BootedLogin;  // 已连接KVM，已开机（现在出现login）
                         }
                         "UNMATCHED" => {
                             // 开着，但是超时了，也有可能关不上了，建议是拔掉再试一次，或者打印贴纸
                             // ##
                         }
                         "NO-DATA" => {
-                            app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                            app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         }
                         "LOW-DENSITY" => {
                             log("等待过程数据密度低于限额, 进入未连接KVM状态");
-                            app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                            app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         }
                         _ => {
-                            app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                            app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         }
                     }
                 }
-                AppStep1Status::BootedLogin => {  // 已连接KVM，已开机（现在出现login）
+                AppStepStatus::BootedLogin => {  // 已连接KVM，已开机（现在出现login）
                     log("已连接KVM，已开机（现在出现login）, 输入root密码");
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Testing);
                     if ! execute_command_and_wait("root\n", "Password", 1000).await {
-                        app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                        app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         continue;
                     }
                     log("输入root密码成功, 输入sipeed密码");
                     if ! execute_command_and_wait("sipeed\n", "Welcome", 1000).await {
-                        app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                        app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         continue;
                     }
                     // 等待一部分初始信息
                     std::thread::sleep(Duration::from_millis(100));
                     log("登录成功, 发送回车等待:~#");
                     if ! execute_command_and_wait("\n", ":~#", 1000).await { 
-                        app_step1_status = AppStep1Status::ConnectedNoKVM;  // 未连接KVM
+                        app_step1_status = AppStepStatus::ConnectedNoKVM;  // 未连接KVM
                         continue;
                     }
-                    app_step1_status = AppStep1Status::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
+                    app_step1_status = AppStepStatus::LoggedIn;  // 已连接KVM，已登录（现在出现:~#）
                 }
-                AppStep1Status::LoggedIn => {  // 已连接KVM，已登录（现在出现:~#）
+                AppStepStatus::LoggedIn => {  // 已连接KVM，已登录（现在出现:~#）
                     log("已连接KVM，已登录（现在出现:~#）");
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Success);
@@ -242,9 +245,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     // }
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
                     set_target_ip(app_handle.clone(), "172.168.100.2");
-                    app_step1_status = AppStep1Status::DownloadFile;  // 下载文件中
+                    app_step1_status = AppStepStatus::DownloadFile;  // 下载文件中
                 }
-                AppStep1Status::DownloadFile => {  // 下载文件中
+                AppStepStatus::DownloadFile => {  // 下载文件中
                     log("下载文件中");
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Testing);
 
@@ -258,7 +261,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                         if response == "NO" {
                             log("用户选择了不重新下载");
                             set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
-                            app_step1_status = AppStep1Status::CheckingHardware;  // 未连接KVM
+                            app_step1_status = AppStepStatus::CheckingHardware;  // 未连接KVM
                             continue;
                         } else {
                             log("用户选择了重新下载");
@@ -280,12 +283,12 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     let _ = execute_command_and_wait("tar -xf /root/test.tar -C /root/\n", ":~#", 2000).await;
 
                     log("设置文件权限");
-                    let _ = execute_command_and_wait("chmod -R +x /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
+                    let _ = execute_command_and_wait("chmod -R +x /root/NanoKVM_Pro_Testing\n", ":~#", 5000).await;
                     
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
-                    app_step1_status = AppStep1Status::CheckingHardware;  // 检查硬件中
+                    app_step1_status = AppStepStatus::CheckingHardware;  // 检查硬件中
                 }
-                AppStep1Status::CheckingHardware => {  // 检查硬件中
+                AppStepStatus::CheckingHardware => {  // 检查硬件中
                     log("检查硬件中");
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Testing);
 
@@ -343,6 +346,11 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                     target_name = format!("NanoKVM-{}", hardware_type);
                                     // NanoKVM_Pro (Desk-B) NeaR00293
                                     target_type = format!("NanoKVM_Pro ({}) ", hardware_type);
+                                    if target_type.contains("ATX") {
+                                        target_hardware_type = HardwareType::Atx;
+                                    } else {
+                                        target_hardware_type = HardwareType::Desk;
+                                    }
                                 }
                             }
                             // 获取或生成当前板卡的串号
@@ -367,16 +375,27 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                 log("RUST检测到当前板卡有wifi模块");
                                 wifi_exist = true;
                             }
+                            // 获取soc id
+                            if let Some(start) = output.find("SOC ID: ") {
+                                let content_start = start + "SOC ID: ".len();
+                                let remaining = &output[content_start..];
+                                if let Some(end) = remaining.find('\n') {
+                                    let soc_id = &remaining[..end].trim();
+                                    log(&format!("RUST检测到当前板卡的soc id为: {}", soc_id));
+                                }
+                            }
                         }
                         Err(e) => {
                             log(&format!("SSH命令执行失败: {}", e));
+                            set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Repairing);
+                            continue;
                         }
                     }
 
                     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::Success);
-                    app_step1_status = AppStep1Status::CheckingEmmc;  // 检查eMMC中
+                    app_step1_status = AppStepStatus::CheckingEmmc;  // 检查eMMC中
                 }
-                AppStep1Status::CheckingEmmc => {  // 检查eMMC中
+                AppStepStatus::CheckingEmmc => {  // 检查eMMC中
                     log("检查eMMC中");
                     set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Testing);
 
@@ -385,7 +404,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                             if output.contains("eMMC test passed") {
                                 log("eMMC测试通过");
                                 set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success);
-                                app_step1_status = AppStep1Status::Printing;
+                                app_step1_status = AppStepStatus::Printing;
                                 continue;
                             } else {
                                 log("eMMC测试失败");
@@ -411,7 +430,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                         }
                     }
                 }
-                AppStep1Status::Printing => {  // 打印中
+                AppStepStatus::Printing => {  // 打印中
                     log("打印身份贴纸");
                     if is_printer_connected().await {
                         log("打印机已连接");
@@ -422,7 +441,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                 // #
                             }
                         }
-                        app_step1_status = AppStep1Status::Finished;
+                        app_step1_status = AppStepStatus::StartStep2;
                         continue;
                     } else {
                         log("打印机未连接,弹窗检测");
@@ -435,29 +454,72 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                         continue;
                     }
                 }
-                AppStep1Status::Finished => {  // 完成
+                AppStepStatus::StartStep2 => {  // 启动Step2
                     log("Step1完成，启动Step2内容");
-                    spawn_step2_file_update(app_handle.clone());
-                    spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
-                    spawn_step2_usb_testing(app_handle.clone());
-                    // spawn_step2_eth_testing(app_handle.clone(), "192.168.2.201");
-                    spawn_step2_eth_testing(app_handle.clone(), "192.168.1.7");
-                    spawn_step2_wifi_testing(app_handle.clone(), &ssid, &password);
-                    spawn_step2_penal_testing(app_handle.clone());
-                    spawn_step2_ux_testing(app_handle.clone());
-                    spawn_step2_atx_testing(app_handle.clone());
-                    spawn_step2_io_testing(app_handle.clone());
-                    spawn_step2_tf_testing(app_handle.clone());
+                    let file_update_handle = spawn_step2_file_update(app_handle.clone());
+                    let app_install_handle = spawn_step2_app_install(app_handle.clone());
+                    let hdmi_testing_handle = spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
+                    let usb_testing_handle = spawn_step2_usb_testing(app_handle.clone());
+                    let eth_testing_handle = spawn_step2_eth_testing(app_handle.clone(), "192.168.1.7");
+                    // spawn_step2_eth_testing(app_handle.clone(), "192.168.1.7");
+                    let wifi_testing_handle = spawn_step2_wifi_testing(app_handle.clone(), &ssid, &password, wifi_exist);
+                    let penal_testing_handle = spawn_step2_penal_testing(app_handle.clone(), target_hardware_type.clone());
+                    let ux_testing_handle = spawn_step2_ux_testing(app_handle.clone(), target_hardware_type.clone());
+                    let atx_testing_handle = spawn_step2_atx_testing(app_handle.clone());
+                    let io_testing_handle = spawn_step2_io_testing(app_handle.clone());
+                    let tf_testing_handle = spawn_step2_tf_testing(app_handle.clone());
+                    let uart_testing_handle = spawn_step2_uart_testing(app_handle.clone(), target_hardware_type.clone());
                     log("Step2启动完成");
 
-                    loop {
-                        log("sleep");
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    }
-                    handle.abort();  // 下载完成后+网速测试完成后，终止文件服务器任务
+                    usb_testing_handle.await.unwrap();
+                    log("USB测试完成");
+                    eth_testing_handle.await.unwrap();
+                    log("ETH测试完成");
+                    wifi_testing_handle.await.unwrap();
+                    log("WIFI测试完成");
+                    penal_testing_handle.await.unwrap();
+                    log("Penal测试完成");
+                    ux_testing_handle.await.unwrap();
+                    log("UX测试完成");
+                    atx_testing_handle.await.unwrap();
+                    log("ATX测试完成");
+                    io_testing_handle.await.unwrap();
+                    log("IO测试完成");
+                    tf_testing_handle.await.unwrap();
+                    log("TF测试完成");
+                    uart_testing_handle.await.unwrap();
+                    log("UART测试完成");
+                    hdmi_testing_handle.await.unwrap();
+                    log("HDMI测试完成");
+                    file_update_handle.await.unwrap();
+                    log("文件更新完成");
+                    app_install_handle.await.unwrap();
+                    log("应用安装完成");
+
+                    log("Step2测试完成");
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    file_server_handle.abort();  // 下载完成后+网速测试完成后，终止文件服务器任务
+
+                    app_step1_status = AppStepStatus::StartStep3;
+                }
+                AppStepStatus::StartStep3 => {  // 打印中
+                    log("Step2测试完成，启动Step3内容");
+                    let test_end_handle = spawn_step3_test_end(app_handle.clone());
+                    test_end_handle.await.unwrap();
+                    app_step1_status = AppStepStatus::Finished;
+                }
+                AppStepStatus::Finished => {  // 完成
+                    log("测试完成");
+                    std::thread::sleep(Duration::from_millis(500));
+                    // 弹窗测试完成
+                    let _ = show_dialog_and_wait(app_handle.clone(), "测试完成，请拔出线缆".to_string(), vec![
+                        serde_json::json!({ "text": "确定" }),
+                    ]);
+                    std::thread::sleep(Duration::from_millis(500));
+                    break;
                 }
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-    });
+    })
 }

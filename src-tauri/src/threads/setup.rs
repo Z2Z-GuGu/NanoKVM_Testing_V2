@@ -1,4 +1,6 @@
 use std::thread;
+use tokio::time::sleep;
+use tauri::async_runtime::{spawn, JoinHandle};
 use std::time::Duration;
 use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty, set_test_status};
 use crate::threads::serial::{is_usb_tool_connected};
@@ -21,9 +23,15 @@ fn log(msg: &str) {
         println!("[setup]{}", msg);
     }
 }
-        
+
+// pub fn spawn_step2_file_update(app_handle: AppHandle) {
+//     spawn(async move {
+//     });
+// }
+
 pub fn spawn_setup_task(app_handle: AppHandle) {
-    thread::spawn(move || {
+    // thread::spawn(move || {
+    spawn(async move {
         log("初始化线程已启动");
         let mut ap_ssid = String::new();
         let mut ap_password = String::new();
@@ -46,7 +54,8 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         }
 
         // 延迟2秒后推送初始测试数据，确保前端已经准备好
-        std::thread::sleep(std::time::Duration::from_secs(2));
+        // std::thread::sleep(std::time::Duration::from_secs(2));
+        sleep(Duration::from_secs(2)).await;
 
         // 检测配置文件夹
         let mut config_warning_msg = String::new();
@@ -114,10 +123,10 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
 
         // 循环检测USB工具、打印机、摄像头是否连接
         loop{
-            // 在普通线程中执行异步函数
             let mut warning_msg = String::new();
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            if runtime.block_on(is_usb_tool_connected()) {
+            // 检查USB工具是否连接
+            // let runtime = tokio::runtime::Runtime::new().unwrap();
+            if is_usb_tool_connected().await {
                 log("USB工具已连接");
             } else {
                 log("USB工具未连接");
@@ -125,7 +134,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             }
             
             // 检查打印机是否连接
-            if runtime.block_on(is_printer_connected()) {
+            if is_printer_connected().await {
                 log("打印机已连接");
             } else {
                 log("打印机未连接");
@@ -133,7 +142,7 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             }
 
             // 检查摄像头是否连接
-            if runtime.block_on(get_camera_status()) != CameraStatus::Disconnected {
+            if get_camera_status().await != CameraStatus::Disconnected {
                 log("摄像头已连接");
             } else {
                 log("摄像头未连接");
@@ -149,45 +158,16 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
                     thread::sleep(Duration::from_millis(500));
                     continue;
                 }
-                // use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-                // let ret = Arc::new(AtomicBool::new(false));
-                // let ret_clone = Arc::clone(&ret);
-                
-                // show_dialog(app_handle.clone(), warning_msg.to_string(), vec![
-                //     serde_json::json!({ "text": "重新检测" })
-                // ], move |result| {
-                //     log(&format!("用户点击了按钮: {}", result));
-                //     if result == "重新检测" {
-                //         ret_clone.store(true, Ordering::SeqCst);
-                //     }
-                // });
-                
-                // while !ret.load(Ordering::SeqCst) {
-                //     // 100ms 检查一次
-                //     thread::sleep(Duration::from_millis(100));
-                // }
-
-                // // 推送关闭弹窗事件
-                // if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
-                //     log(&format!("弹窗测试任务关闭弹窗失败: {}", e));
-                // }
-                // // 等待弹窗关闭动画500ms
-                // thread::sleep(Duration::from_millis(500));
             } else {
                 log("所有测试工具均已连接");
                 break;
             }
         }
         // serial_data_management_task(app_handle.clone());
-        spawn_app_step1_task(app_handle.clone(), ap_ssid.clone(), ap_password.clone());
-        // 启动测试任务线程后直接退出线程
-        // spawn_test_task(app_handle.clone());
-        // spawn_app_step1_task(app_handle.clone());
-        // let runtime = tokio::runtime::Runtime::new().unwrap();
-        // runtime.spawn(spawn_app_step1_task(app_handle.clone()));
-        
-        // 设置前端服务器状态为true
-        set_server_state(app_handle.clone(), true);
+        loop {
+            let app_step_handle = spawn_app_step1_task(app_handle.clone(), ap_ssid.clone(), ap_password.clone());
+            app_step_handle.await.unwrap();
+        }
 
         log("测试任务线程已启动，退出初始化线程");
     });

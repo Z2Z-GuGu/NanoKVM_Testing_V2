@@ -25,7 +25,7 @@ const SERIAL_BAUD_RATE: u32 = 115200;
 // const DEFAULT_PASSWORD: &str = "sipeed";
 
 
-const MAX_UPDATE_CONNECT_ERR_COUNT: u32 = 10;        // 最大连接错误次数，超过则认为连接失败
+const MAX_UPDATE_CONNECT_ERR_COUNT: u32 = 20;        // 最大连接错误次数，超过则认为连接失败
 const MAX_CONNECT_DETECTE_DUTY_MS: u64 = 500;       // 检测周期500ms
 const MAX_RECEIVE_DATA_TIMEOUT_MS: u64 = 100;       // 最大接收数据超时时间100ms
 const FILTER_WINDOW_SIZE: usize = 10;                // 滑动滤波器窗口大小（时间=5*MAX_RECEIVE_DATA_TIMEOUT_MS）

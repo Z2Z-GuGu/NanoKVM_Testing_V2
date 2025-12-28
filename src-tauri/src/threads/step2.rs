@@ -1,11 +1,10 @@
 use std::time::Duration;
-use tauri::async_runtime::spawn;
+use tauri::async_runtime::{spawn, JoinHandle};
 use tauri::AppHandle;
 use tokio::time::sleep;
 use crate::threads::update_state::{AppTestStatus, set_step_status};
 use crate::threads::ssh::{ssh_execute_command_check_success, ssh_execute_command};
 use crate::threads::camera::{get_camera_status, CameraStatus};
-use crate::threads::server::spawn_file_server_task;
 use crate::threads::save::get_config_str;
 use crate::threads::dialog_test::{show_dialog_and_wait};
 
@@ -17,7 +16,14 @@ const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_UPLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const WIFI_CONNECT_MAX_RETRY_COUNT: u64 = 5;
-const ATX_IO_TF_TEST_MAX_RETRY_COUNT: u64 = 5;
+const IO_TEST_MAX_RETRY_COUNT: u64 = 5;
+
+// 枚举atx/desk：
+#[derive(PartialEq, Clone)]
+pub enum HardwareType {
+    Atx,
+    Desk,
+}
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -53,7 +59,7 @@ async fn auto_test_with_retry(app_handle: &AppHandle, test_name: &str, test_cmd:
     (false, last_output)
 }
 
-pub fn spawn_step2_file_update(app_handle: AppHandle) {
+pub fn spawn_step2_file_update(app_handle: AppHandle) -> JoinHandle<()> {
     log("进入step2_file_update");
     spawn(async move {
         log("更新KVM文件");
@@ -89,7 +95,15 @@ pub fn spawn_step2_file_update(app_handle: AppHandle) {
             set_step_status(app_handle.clone(), "kernel", AppTestStatus::Repairing);
         }
         set_step_status(app_handle.clone(), "kernel", AppTestStatus::Success);
+        
+        // 等待1秒，确保文件更新完成
+        sleep(Duration::from_secs(1)).await;
+    })
+}
 
+pub fn spawn_step2_app_install(app_handle: AppHandle) -> JoinHandle<()> {
+    log("进入step2_app_install");
+    spawn(async move {
         // app
         set_step_status(app_handle.clone(), "app_install", AppTestStatus::Testing);
         let mut app_update_success = false;
@@ -100,14 +114,13 @@ pub fn spawn_step2_file_update(app_handle: AppHandle) {
             set_step_status(app_handle.clone(), "app_install", AppTestStatus::Repairing);
         }
         set_step_status(app_handle.clone(), "app_install", AppTestStatus::Success);
-        loop {
-            // log("sleep");
-            sleep(Duration::from_secs(1)).await;
-        }
-    });
+        
+        // 等待1秒，确保文件更新完成
+        sleep(Duration::from_secs(1)).await;
+    })
 }
 
-pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target_serial: &str) {
+pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target_serial: &str) -> JoinHandle<()> {
     // log("进入step2_hdmi_testing");
     let target_type = target_type.to_string();
     let target_serial = target_serial.to_string();
@@ -188,22 +201,21 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         // 写入EDID
         let _ = auto_test_with_retry(&app_handle, "hdmi_write_edid", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh edid", "HDMI EDID write passed", HDMI_EDID_TEST_MAX_RETRY_COUNT).await;
         
-        loop {
-            // log("sleep");
-            sleep(Duration::from_secs(1)).await;
-        }
-    });
+        // 等待1秒，确保EDID写入完成
+        sleep(Duration::from_secs(1)).await;
+    })
 }
 
-pub fn spawn_step2_usb_testing(app_handle: AppHandle) {
+pub fn spawn_step2_usb_testing(app_handle: AppHandle) -> JoinHandle<()> {
     spawn(async move {
         log("USB测试中...");
         let _ = auto_test_with_retry(&app_handle, "usb_wait_connection", "/root/NanoKVM_Pro_Testing/test_sh/06_usb_test.sh", "USB test passed", USB_TEST_MAX_RETRY_COUNT).await;
+        // 等待1秒，确保USB测试完成
         sleep(Duration::from_secs(1)).await;
-    });
+    })
 }
 
-pub fn spawn_step2_eth_testing(app_handle: AppHandle, ip: &str) {
+pub fn spawn_step2_eth_testing(app_handle: AppHandle, ip: &str) -> JoinHandle<()> {
     let ip = ip.to_string();
     spawn(async move {
         log("网络测试中...");
@@ -225,19 +237,25 @@ pub fn spawn_step2_eth_testing(app_handle: AppHandle, ip: &str) {
         // 测试下载
         let _ = auto_test_with_retry(&app_handle, "eth_download_test", &download_test_cmd, "ETH download test passed", ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT).await;
 
+        // 等待1秒，确保ETH测试完成
         sleep(Duration::from_secs(1)).await;
-    });
+    })
 }
 
-pub fn spawn_step2_wifi_testing(app_handle: AppHandle, ssid: &str, password: &str) {
+pub fn spawn_step2_wifi_testing(app_handle: AppHandle, ssid: &str, password: &str, wifi_exist: bool) -> JoinHandle<()> {
     let ssid = ssid.to_string();
     let password = password.to_string();
     spawn(async move {
-        log("等待wifi连接...");
-        let connect_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/08_wifi_test.sh connect {} {}", ssid, password);
-        let (wifi_connect_result, wifi_connect_output) = auto_test_with_retry(&app_handle, "wifi_wait_connection", &connect_test_cmd, "WiFi connect passed", WIFI_CONNECT_MAX_RETRY_COUNT).await;
-        if wifi_connect_result {
-            // 连接成功
+        if !wifi_exist {
+            set_step_status(app_handle.clone(), "wifi_wait_connection", AppTestStatus::Hidden);
+            set_step_status(app_handle.clone(), "wifi_upload_test", AppTestStatus::Hidden);
+            set_step_status(app_handle.clone(), "wifi_download_test", AppTestStatus::Hidden);
+        } else {
+            log("等待wifi连接...");
+            let connect_test_cmd = format!("/root/NanoKVM_Pro_Testing/test_sh/08_wifi_test.sh connect {} {}", ssid, password);
+            let (wifi_connect_result, wifi_connect_output) = auto_test_with_retry(&app_handle, "wifi_wait_connection", &connect_test_cmd, "WiFi connect passed", WIFI_CONNECT_MAX_RETRY_COUNT).await;
+            if wifi_connect_result {
+                // 连接成功
             let mut target_ip = String::new();
             if let Some(start) = wifi_connect_output.find("DHCP服务器IP: ") {
                 let content_start = start + "DHCP服务器IP: ".len();
@@ -263,23 +281,34 @@ pub fn spawn_step2_wifi_testing(app_handle: AppHandle, ssid: &str, password: &st
             let _ = auto_test_with_retry(&app_handle, "wifi_upload_test", &upload_test_cmd, "WiFi upload test passed", ETH_UPLOAD_TEST_MAX_RETRY_COUNT).await;
             // 测试下载
             let _ = auto_test_with_retry(&app_handle, "wifi_download_test", &download_test_cmd, "WiFi download test passed", ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT).await;
-        } else {
-            log(&format!("wifi连接失败，输出: {}", wifi_connect_output));
+            } else {
+                log(&format!("wifi连接失败，输出: {}", wifi_connect_output));
+            }
         }
-    });
+        // 等待1秒，确保WIFI测试完成
+        sleep(Duration::from_secs(1)).await;
+    })
 }
 
-pub fn spawn_step2_penal_testing(app_handle: AppHandle) {
+pub fn spawn_step2_penal_testing(app_handle: AppHandle, hardware_type: HardwareType) -> JoinHandle<()> {
     spawn(async move {
         log("启动屏幕测试服务");
-        set_step_status(app_handle.clone(), "screen", AppTestStatus::Testing);
-        let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh lcd 60").await;
-        log("屏幕测试服务退出");
+        if hardware_type == HardwareType::Atx {
+            set_step_status(app_handle.clone(), "screen", AppTestStatus::Testing);
+            let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh oled 60").await;
+            log("屏幕测试服务退出");
+        } else {
+            set_step_status(app_handle.clone(), "screen", AppTestStatus::Testing);
+            let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh lcd 60").await;
+            log("屏幕测试服务退出");
+        }
+
+        // 等待1秒，确保屏幕测试完成
         sleep(Duration::from_secs(1)).await;
-    });
+    })
 }
 
-pub fn spawn_step2_ux_testing(app_handle: AppHandle) {
+pub fn spawn_step2_ux_testing(app_handle: AppHandle, hardware_type: HardwareType) -> JoinHandle<()> {
     spawn(async move {
         // 等待屏幕闪烁程序启动
         sleep(Duration::from_secs(2)).await;
@@ -293,38 +322,74 @@ pub fn spawn_step2_ux_testing(app_handle: AppHandle) {
         } else {
             set_step_status(app_handle.clone(), "screen", AppTestStatus::Success);
         }
-        let _ = ssh_execute_command("kill $(cat /tmp/lcd.pid)").await;
         // 等待弹窗消失500ms
         // std::thread::sleep(Duration::from_millis(500));
-        // 测试触摸
-        let _ = auto_test_with_retry(&app_handle, "touch", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh touch 60", "Touch test passed", 1).await;
-        // 测试旋钮
-        let _ = auto_test_with_retry(&app_handle, "knob", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh rotary 60", "Rotary test passed", 1).await;
-    });
+        if hardware_type == HardwareType::Atx {
+            let _ = ssh_execute_command("kill $(cat /tmp/oled.pid)").await;
+            set_step_status(app_handle.clone(), "touch", AppTestStatus::Hidden);
+            set_step_status(app_handle.clone(), "knob", AppTestStatus::Hidden);
+        } else {
+            let _ = ssh_execute_command("kill $(cat /tmp/lcd.pid)").await;
+            // 测试触摸
+            let _ = auto_test_with_retry(&app_handle, "touch", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh touch 60", "Touch test passed", 1).await;
+            // 测试旋钮
+            let _ = auto_test_with_retry(&app_handle, "knob", "/root/NanoKVM_Pro_Testing/test_sh/09_panel_test.sh rotary 60", "Rotary test passed", 1).await;
+        }
+
+        // 等待1秒，确保UX测试完成
+        sleep(Duration::from_secs(1)).await;
+    })
 }
 
-pub fn spawn_step2_atx_testing(app_handle: AppHandle) {
+pub fn spawn_step2_atx_testing(app_handle: AppHandle) -> JoinHandle<()> {
     spawn(async move {        
-        let _ = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", ATX_IO_TF_TEST_MAX_RETRY_COUNT).await;
-
+        let _ = auto_test_with_retry(&app_handle, "atx", "/root/NanoKVM_Pro_Testing/test_sh/10_atx_test.sh desk", "ATX test passed", IO_TEST_MAX_RETRY_COUNT).await;
+        
+        // 等待1秒，确保ATX测试完成
         sleep(Duration::from_secs(1)).await;
-    });
+    })
 }
 
-pub fn spawn_step2_io_testing(app_handle: AppHandle) {
+pub fn spawn_step2_io_testing(app_handle: AppHandle) -> JoinHandle<()> {
     spawn(async move {        
-        let _ = auto_test_with_retry(&app_handle, "io", "/root/NanoKVM_Pro_Testing/test_sh/11_io_test.sh 10", "IO test passed", ATX_IO_TF_TEST_MAX_RETRY_COUNT).await;
-
+        let _ = auto_test_with_retry(&app_handle, "io", "/root/NanoKVM_Pro_Testing/test_sh/11_io_test.sh 10", "IO test passed", IO_TEST_MAX_RETRY_COUNT).await;
+        
+        // 等待1秒，确保IO测试完成
         sleep(Duration::from_secs(1)).await;
-    });
+    })
 }
 
-pub fn spawn_step2_tf_testing(app_handle: AppHandle) {
+pub fn spawn_step2_tf_testing(app_handle: AppHandle) -> JoinHandle<()> {
     spawn(async move {        
-        let _ = auto_test_with_retry(&app_handle, "tf_card", "/root/NanoKVM_Pro_Testing/test_sh/12_tf_test.sh", "TF test passed", ATX_IO_TF_TEST_MAX_RETRY_COUNT).await;
-
+        let _ = auto_test_with_retry(&app_handle, "tf_card", "/root/NanoKVM_Pro_Testing/test_sh/12_tf_test.sh", "TF test passed", IO_TEST_MAX_RETRY_COUNT).await;
+        
+        // 等待1秒，确保TF测试完成
         sleep(Duration::from_secs(1)).await;
-    });
+    })
+}
+
+pub fn spawn_step2_uart_testing(app_handle: AppHandle, hardware_type: HardwareType) -> JoinHandle<()> {
+    spawn(async move {
+        if hardware_type == HardwareType::Desk {
+            let _ = auto_test_with_retry(&app_handle, "uart", "/root/NanoKVM_Pro_Testing/test_sh/13_uart_test.sh", "UART test passed", IO_TEST_MAX_RETRY_COUNT).await;
+        } else {
+            set_step_status(app_handle.clone(), "uart", AppTestStatus::Hidden);
+        }
+        
+        // 等待1秒，确保UART测试完成
+        sleep(Duration::from_secs(1)).await;
+    })
+}
+
+pub fn spawn_step3_test_end(app_handle: AppHandle) -> JoinHandle<()> {
+    spawn(async move {
+        // 等待1秒，确保UART测试完成
+        set_step_status(app_handle.clone(), "auto_start", AppTestStatus::Testing);
+        let _ = ssh_execute_command("/root/NanoKVM_Pro_Testing/test_sh/14_test_end.sh").await;
+        let _ = ssh_execute_command("rm -r /root/*").await;
+        set_step_status(app_handle.clone(), "auto_start", AppTestStatus::Success);
+        sleep(Duration::from_secs(1)).await;
+    })
 }
 
 // pub fn spawn_step2_file_update(app_handle: AppHandle) {

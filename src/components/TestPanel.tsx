@@ -38,6 +38,7 @@ interface TestButtonStates {
   atx: TestButtonStatus;
   io: TestButtonStatus;
   tf_card: TestButtonStatus;
+  uart: TestButtonStatus;
   auto_start: TestButtonStatus;
 }
 
@@ -73,6 +74,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
     atx: 'untested',
     io: 'untested',
     tf_card: 'untested',
+    uart: 'untested',
     auto_start: 'untested',
   });
 
@@ -194,6 +196,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
           <TestButton status={buttonStates.atx} isDark={isDark}>ATX</TestButton>
           <TestButton status={buttonStates.io} isDark={isDark}>IO</TestButton>
           <TestButton status={buttonStates.tf_card} isDark={isDark}>TF卡</TestButton>
+          <TestButton status={buttonStates.uart} isDark={isDark}>UART</TestButton>
         </div>
       </section>
 

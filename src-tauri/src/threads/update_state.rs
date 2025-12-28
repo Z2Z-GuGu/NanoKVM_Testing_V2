@@ -1,7 +1,85 @@
 // 更新前端状态库：使用几个函数直接确定前端状态亮哪个灭哪个
 use tauri::{AppHandle, Emitter};
 use std::fmt;
-use crate::threads::save::{get_config_str};
+use serde_json;
+
+// use state::Storage;
+use once_cell::sync::OnceCell;
+use std::sync::{Arc, Mutex};
+
+pub struct TestState {
+    pub wait_connection: AppTestStatus,
+    pub wait_boot: AppTestStatus,
+    pub get_ip: AppTestStatus,
+    pub download_test: AppTestStatus,
+    pub detect_hardware: AppTestStatus,
+    pub emmc_test: AppTestStatus,
+    pub dtb: AppTestStatus,
+    pub uboot: AppTestStatus,
+    pub kernel: AppTestStatus,
+    pub app_install: AppTestStatus,
+    pub hdmi_wait_connection: AppTestStatus,
+    pub hdmi_io_test: AppTestStatus,
+    pub hdmi_loop_test: AppTestStatus,
+    pub hdmi_capture_test: AppTestStatus,
+    pub hdmi_version: AppTestStatus,
+    pub hdmi_write_edid: AppTestStatus,
+    pub usb_wait_connection: AppTestStatus,
+    pub eth_wait_connection: AppTestStatus,
+    pub eth_upload_test: AppTestStatus,
+    pub eth_download_test: AppTestStatus,
+    pub wifi_wait_connection: AppTestStatus,
+    pub wifi_upload_test: AppTestStatus,
+    pub wifi_download_test: AppTestStatus,
+    pub screen: AppTestStatus,
+    pub touch: AppTestStatus,
+    pub knob: AppTestStatus,
+    pub atx: AppTestStatus,
+    pub io: AppTestStatus,
+    pub tf_card: AppTestStatus,
+    pub uart: AppTestStatus,
+    pub auto_start: AppTestStatus,
+}
+
+pub static CURRENT_TEST_STATE: OnceCell<Arc<Mutex<TestState>>> = OnceCell::new();
+
+pub fn init_global_state() {
+    CURRENT_TEST_STATE.get_or_init(|| {
+        Arc::new(Mutex::new(TestState {
+            wait_connection: AppTestStatus::UnTested,
+            wait_boot: AppTestStatus::UnTested,
+            get_ip: AppTestStatus::UnTested,
+            download_test: AppTestStatus::UnTested,
+            detect_hardware: AppTestStatus::UnTested,
+            emmc_test: AppTestStatus::UnTested,
+            dtb: AppTestStatus::UnTested,
+            uboot: AppTestStatus::UnTested,
+            kernel: AppTestStatus::UnTested,
+            app_install: AppTestStatus::UnTested,
+            hdmi_wait_connection: AppTestStatus::UnTested,
+            hdmi_io_test: AppTestStatus::UnTested,
+            hdmi_loop_test: AppTestStatus::UnTested,
+            hdmi_capture_test: AppTestStatus::UnTested,
+            hdmi_version: AppTestStatus::UnTested,
+            hdmi_write_edid: AppTestStatus::UnTested,
+            usb_wait_connection: AppTestStatus::UnTested,
+            eth_wait_connection: AppTestStatus::UnTested,
+            eth_upload_test: AppTestStatus::UnTested,
+            eth_download_test: AppTestStatus::UnTested,
+            wifi_wait_connection: AppTestStatus::UnTested,
+            wifi_upload_test: AppTestStatus::UnTested,
+            wifi_download_test: AppTestStatus::UnTested,
+            screen: AppTestStatus::UnTested,
+            touch: AppTestStatus::UnTested,
+            knob: AppTestStatus::UnTested,
+            atx: AppTestStatus::UnTested,
+            io: AppTestStatus::UnTested,
+            tf_card: AppTestStatus::UnTested,
+            uart: AppTestStatus::UnTested,
+            auto_start: AppTestStatus::UnTested,
+        }))
+    });
+}
 
 // 测试项目的状态枚举：'untested' | 'testing' | 'repairing' | 'success' | 'failed' | 'hidden';
 #[derive(Debug, PartialEq, Clone)]
@@ -16,7 +94,7 @@ pub enum AppTestStatus {
 
 // 状态枚举
 #[derive(Debug, PartialEq, Clone)]
-pub enum AppStep1Status {
+pub enum AppStepStatus {
     Unconnected         = 0,  // 未连接工具
     ConnectedNoKVM      = 1,  // 已连接工具, 未连接KVM
     Uncertain           = 2,  // 状态不确定
@@ -24,11 +102,13 @@ pub enum AppStep1Status {
     Booting             = 4,  // 已连接KVM，开机中
     BootedLogin         = 5,  // 已连接KVM，已开机（现在出现login）
     LoggedIn            = 6,  // 已连接KVM，已登录（现在出现:~#）
-    DownloadFile       = 7,  // 下载文件中
-    CheckingHardware   = 8,  // 检查硬件中
-    CheckingEmmc       = 9,  // 检查eMMC中
+    DownloadFile        = 7,  // 下载文件中
+    CheckingHardware    = 8,  // 检查硬件中
+    CheckingEmmc        = 9,  // 检查eMMC中
     Printing            = 10, // 打印中
-    Finished            = 11, // 完成
+    StartStep2          = 11, // 启动Step2
+    StartStep3          = 12, // 启动Step3
+    Finished            = 13, // 完成
 }
 
 // 日志控制：false=关闭日志，true=开启日志
@@ -70,11 +150,12 @@ pub fn set_server_state(app_handle: AppHandle, state: bool) {
 
 // 设置当前硬件类型
 pub fn set_current_hardware(app_handle: AppHandle, hardware: &str) {
-    let number = get_config_str("testing", "board_version");
-    let machine_number = number.unwrap_or_else(|| "A".to_string());
-    let current_device = format!("{}-{}", hardware, machine_number);
+    // let number = get_config_str("testing", "board_version");
+    // let machine_number = number.unwrap_or_else(|| "A".to_string());
+    // let current_device = format!("{}-{}", hardware, machine_number);
 
-    if let Err(e) = app_handle.clone().emit("current-device-update", current_device.as_str()) {
+    // if let Err(e) = app_handle.clone().emit("current-device-update", current_device.as_str()) {
+    if let Err(e) = app_handle.clone().emit("current-device-update", hardware) {
         log(&format!("测试任务推送当前设备失败: {}", e));
     }
 }
@@ -100,11 +181,54 @@ pub fn set_upload_count(app_handle: AppHandle, count: u64) {
     }
 }
 
+pub fn set_state_to_struct(test_str: &str, test_status: AppTestStatus) {
+    if let Some(state_arc) = CURRENT_TEST_STATE.get() {
+        if let Ok(mut state) = state_arc.lock() {
+            match test_str {
+                "wait_connection" => { state.wait_connection = test_status; }
+                "wait_boot" => { state.wait_boot = test_status; }
+                "get_ip" => { state.get_ip = test_status; }
+                "download_test" => { state.download_test = test_status; }
+                "detect_hardware" => { state.detect_hardware = test_status; }
+                "emmc_test" => { state.emmc_test = test_status; }
+                "dtb" => { state.dtb = test_status; }
+                "uboot" => { state.uboot = test_status; }
+                "kernel" => { state.kernel = test_status; }
+                "app_install" => { state.app_install = test_status; }
+                "hdmi_wait_connection" => { state.hdmi_wait_connection = test_status; }
+                "hdmi_io_test" => { state.hdmi_io_test = test_status; }
+                "hdmi_loop_test" => { state.hdmi_loop_test = test_status; }
+                "hdmi_capture_test" => { state.hdmi_capture_test = test_status; }
+                "hdmi_version" => { state.hdmi_version = test_status; }
+                "hdmi_write_edid" => { state.hdmi_write_edid = test_status; }
+                "usb_wait_connection" => { state.usb_wait_connection = test_status; }
+                "eth_wait_connection" => { state.eth_wait_connection = test_status; }
+                "eth_upload_test" => { state.eth_upload_test = test_status; }
+                "eth_download_test" => { state.eth_download_test = test_status; }
+                "wifi_wait_connection" => { state.wifi_wait_connection = test_status; }
+                "wifi_upload_test" => { state.wifi_upload_test = test_status; }
+                "wifi_download_test" => { state.wifi_download_test = test_status; }
+                "screen" => { state.screen = test_status; }
+                "touch" => { state.touch = test_status; }
+                "knob" => { state.knob = test_status; }
+                "atx" => { state.atx = test_status; }
+                "io" => { state.io = test_status; }
+                "tf_card" => { state.tf_card = test_status; }
+                "uart" => { state.uart = test_status; }
+                "auto_start" => { state.auto_start = test_status; }
+                _ => { log(&format!("未知测试项目: {}", test_str)); }
+            }
+        }
+    }
+}
+
 
 // 设置测试项目状态(字符串+状态)
 pub fn set_step_status(app_handle: AppHandle, test_str: &str, test_status: AppTestStatus) {
+    set_state_to_struct(test_str.clone(), test_status.clone());
+
     if let Err(e) = app_handle.clone().emit("test-button-status-update", serde_json::json!({
-        "buttonId": test_str,
+        "buttonId": test_str.clone(),
         "status": test_status.to_string()
     })) {
         log(&format!("测试任务推送等待启动按钮状态失败: {}", e));
@@ -112,12 +236,44 @@ pub fn set_step_status(app_handle: AppHandle, test_str: &str, test_status: AppTe
 }
 
 pub fn clean_step1_status(app_handle: AppHandle) {
+    // 左边栏状态
+    set_target_ip(app_handle.clone(), "-");
+    set_target_serial(app_handle.clone(), "-");
+    set_current_hardware(app_handle.clone(), "-");
+
+    // step1 测试项目状态
     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "detect_hardware", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "download_test", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::UnTested);
-    set_target_ip(app_handle.clone(), "-");
+    // step2 测试项目状态
+    set_step_status(app_handle.clone(), "dtb", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "uboot", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "kernel", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "app_install", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "hdmi_wait_connection", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "hdmi_io_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "hdmi_capture_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "hdmi_version", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "hdmi_write_edid", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "usb_wait_connection", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "eth_wait_connection", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "eth_upload_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "eth_download_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "wifi_wait_connection", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "wifi_upload_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "wifi_download_test", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "screen", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "touch", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "knob", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "atx", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "io", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "tf_card", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "uart", AppTestStatus::UnTested);
+    // step3 测试项目状态
+    set_step_status(app_handle.clone(), "auto_start", AppTestStatus::UnTested);
 }
 

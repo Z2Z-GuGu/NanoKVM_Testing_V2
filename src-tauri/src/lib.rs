@@ -13,6 +13,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![handle_button_click])
         .setup(move |app| {
+            // 初始化全局测试状态
+            threads::update_state::init_global_state();
             // 启动设置任务线程
             threads::setup::spawn_setup_task(app.handle().clone());
             // 启动串口功能线程
