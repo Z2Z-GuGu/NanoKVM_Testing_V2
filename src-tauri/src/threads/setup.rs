@@ -36,8 +36,10 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         log("初始化线程已启动");
         let mut ap_ssid = String::new();
         let mut ap_password = String::new();
-        let static_ip = "172.168.100.1";
-        let target_ip = "172.168.100.2";
+        // let static_ip = "172.168.100.1";
+        // let target_ip = "172.168.100.2";
+        let static_ip = "192.168.1.7";
+        let target_ip = "192.168.1.15";
         
         // 初始化AppDate
         let app_name = "NanoKVM-Testing";
