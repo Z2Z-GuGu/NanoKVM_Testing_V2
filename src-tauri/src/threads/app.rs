@@ -6,11 +6,12 @@ use crate::threads::serial::{
     serial_send, detect_serial_string, execute_command_and_wait};
 use crate::threads::dialog_test::{show_dialog_and_wait};
 use crate::threads::update_state::{AppStepStatus, AppTestStatus, 
-    set_step_status, clean_step1_status, set_target_ip, set_current_hardware, set_target_serial};
+    set_step_status, clean_step1_status, set_target_ip, set_current_hardware, 
+    set_target_serial, all_step_status_is_success, add_error_msg, get_error_msg};
 use crate::threads::server::spawn_file_server_task;
 use crate::threads::ssh::ssh_execute_command;
-use crate::threads::save::{get_config_str, create_serial_number};
-use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
+use crate::threads::save::{get_config_str, create_serial_number, set_test_status};
+use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, generate_defects_image_with_params, PRINTER_ENABLE, TARGET_PRINTER};
 use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
     spawn_step2_usb_testing, spawn_step2_eth_testing, spawn_step2_wifi_testing, 
     spawn_step2_penal_testing, spawn_step2_ux_testing, spawn_step2_atx_testing,
@@ -49,6 +50,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
         let mut wifi_exist = false;
         let mut target_hardware_type = HardwareType::Desk;
         let mut soc_id = String::new();
+        let mut auto_type = true;
         let file_server_handle = spawn_file_server_task();     // 启动文件服务器任务
         loop {
             // 每轮一定要检测的内容：
@@ -359,6 +361,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                                 serde_json::json!({ "text": "Desk" })
                                             ]);
                                             hardware_type = result;
+                                            auto_type = false;
                                             // 等待弹窗消失500ms
                                             std::thread::sleep(Duration::from_millis(500));
                                         }
@@ -406,10 +409,13 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                 let content_start = start + "SOC ID: ".len();
                                 let remaining = &output[content_start..];
                                 if let Some(end) = remaining.find('\n') {
-                                    let soc_id = &remaining[..end].trim();
+                                    soc_id = remaining[..end].trim().to_string();
                                     log(&format!("RUST检测到当前板卡的soc id为: {}", soc_id));
                                 }
                             }
+                            let _ = set_test_status(&target_serial, "soc_uid", &soc_id);
+                            let _ = set_test_status(&target_serial, "hardware", &target_type);
+                            let _ = set_test_status(&target_serial, "wifi_exist", &wifi_exist.to_string());
                         }
                         Err(e) => {
                             log(&format!("SSH命令执行失败: {}", e));
@@ -431,6 +437,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                 log("eMMC测试通过");
                                 set_step_status(app_handle.clone(), "emmc_test", AppTestStatus::Success);
                                 app_step1_status = AppStepStatus::Printing;
+                                let _ = set_test_status(&target_serial, "emmc", "Normal");
                                 continue;
                             } else {
                                 log("eMMC测试失败");
@@ -442,7 +449,22 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                 ]);
                                 if response == "否，直接打印不良" {
                                     log("用户选择了直接打印不良");
-                                    // ##
+                                    let _ = set_test_status(&target_serial, "emmc", "Damage");
+                                    // 生成错误图片
+                                    add_error_msg("eMMC异常，检查焊接 | ");
+
+                                    let error_msg = get_error_msg();
+                                    if !error_msg.is_empty() {
+                                        log(&format!("测试过程中出现错误: {}", error_msg));
+                                        // 生成错误图片
+                                        let img = generate_defects_image_with_params(&error_msg);
+                                        if PRINTER_ENABLE {
+                                            if let Err(e) = print_image(&img, Some(TARGET_PRINTER)) {
+                                                log(&format!("打印图像失败: {}", e));
+                                                // #
+                                            }
+                                        }
+                                    }
                                 } else {
                                     log("用户选择了YES，重新检测eMMC");
                                     continue;
@@ -485,16 +507,16 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     let file_update_handle = spawn_step2_file_update(app_handle.clone());
                     let app_install_handle = spawn_step2_app_install(app_handle.clone());
                     let hdmi_testing_handle = spawn_step2_hdmi_testing(app_handle.clone(), &target_type, &target_serial);
-                    let usb_testing_handle = spawn_step2_usb_testing(app_handle.clone());
-                    let eth_testing_handle = spawn_step2_eth_testing(app_handle.clone(), &current_static_ip);
+                    let usb_testing_handle = spawn_step2_usb_testing(app_handle.clone(), &target_serial);
+                    let eth_testing_handle = spawn_step2_eth_testing(app_handle.clone(), &target_serial, &current_static_ip);
                     // spawn_step2_eth_testing(app_handle.clone(), "192.168.1.7");
-                    let wifi_testing_handle = spawn_step2_wifi_testing(app_handle.clone(), &ssid, &password, wifi_exist);
+                    let wifi_testing_handle = spawn_step2_wifi_testing(app_handle.clone(), &target_serial, &ssid, &password, wifi_exist);
                     let penal_testing_handle = spawn_step2_penal_testing(app_handle.clone(), target_hardware_type.clone());
-                    let ux_testing_handle = spawn_step2_ux_testing(app_handle.clone(), target_hardware_type.clone());
-                    let atx_testing_handle = spawn_step2_atx_testing(app_handle.clone());
-                    let io_testing_handle = spawn_step2_io_testing(app_handle.clone());
-                    let tf_testing_handle = spawn_step2_tf_testing(app_handle.clone());
-                    let uart_testing_handle = spawn_step2_uart_testing(app_handle.clone(), target_hardware_type.clone());
+                    let ux_testing_handle = spawn_step2_ux_testing(app_handle.clone(), &target_serial, target_hardware_type.clone(), auto_type);
+                    let atx_testing_handle = spawn_step2_atx_testing(app_handle.clone(), &target_serial);
+                    let io_testing_handle = spawn_step2_io_testing(app_handle.clone(), &target_serial);
+                    let tf_testing_handle = spawn_step2_tf_testing(app_handle.clone(), &target_serial);
+                    let uart_testing_handle = spawn_step2_uart_testing(app_handle.clone(), &target_serial, target_hardware_type.clone());
                     log("Step2启动完成");
 
                     usb_testing_handle.await.unwrap();
@@ -530,17 +552,24 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                 }
                 AppStepStatus::StartStep3 => {  // 打印中
                     log("Step2测试完成，启动Step3内容");
-                    let test_end_handle = spawn_step3_test_end(app_handle.clone());
+                    let test_end_handle = spawn_step3_test_end(app_handle.clone(), &target_serial);
                     test_end_handle.await.unwrap();
                     app_step1_status = AppStepStatus::Finished;
                 }
                 AppStepStatus::Finished => {  // 完成
                     log("测试完成");
-                    std::thread::sleep(Duration::from_millis(500));
                     // 弹窗测试完成
-                    let _ = show_dialog_and_wait(app_handle.clone(), "测试完成，请拔出线缆".to_string(), vec![
-                        serde_json::json!({ "text": "确定" }),
-                    ]);
+                    std::thread::sleep(Duration::from_millis(500));
+                    if all_step_status_is_success() {
+                        
+                        let _ = show_dialog_and_wait(app_handle.clone(), "测试完成，请拔出线缆".to_string(), vec![
+                            serde_json::json!({ "text": "已拔出线缆" }),
+                        ]);
+                    } else {
+                        let _ = show_dialog_and_wait(app_handle.clone(), "测试过程中出现错误，请粘贴错误贴纸，并拔出线缆".to_string(), vec![
+                            serde_json::json!({ "text": "已拔出线缆" }),
+                        ]);
+                    }
                     std::thread::sleep(Duration::from_millis(500));
                     break;
                 }

@@ -39,6 +39,7 @@ pub struct TestState {
     pub tf_card: AppTestStatus,
     pub uart: AppTestStatus,
     pub auto_start: AppTestStatus,
+    pub error_msg: String,
 }
 
 pub static CURRENT_TEST_STATE: OnceCell<Arc<Mutex<TestState>>> = OnceCell::new();
@@ -77,6 +78,7 @@ pub fn init_global_state() {
             tf_card: AppTestStatus::UnTested,
             uart: AppTestStatus::UnTested,
             auto_start: AppTestStatus::UnTested,
+            error_msg: String::new(),
         }))
     });
 }
@@ -216,19 +218,44 @@ pub fn set_state_to_struct(test_str: &str, test_status: AppTestStatus) {
                 "tf_card" => { state.tf_card = test_status; }
                 "uart" => { state.uart = test_status; }
                 "auto_start" => { state.auto_start = test_status; }
-                _ => { log(&format!("未知测试项目: {}", test_str)); }
+                _ => { log(&format!("非测试项目: {}", test_str)); }
             }
         }
     }
 }
 
+pub fn add_error_msg(msg: &str) {
+    if let Some(state_arc) = CURRENT_TEST_STATE.get() {
+        if let Ok(mut state) = state_arc.lock() {
+            state.error_msg.push_str(msg);
+        }
+    }
+}
+
+fn clear_error_msg() {
+    if let Some(state_arc) = CURRENT_TEST_STATE.get() {
+        if let Ok(mut state) = state_arc.lock() {
+            state.error_msg.clear();
+        }
+    }
+}
+
+pub fn get_error_msg() -> String {
+    if let Some(state_arc) = CURRENT_TEST_STATE.get() {
+        if let Ok(state) = state_arc.lock() {
+            return state.error_msg.clone();
+        }
+    }
+    String::new()
+}
+
 
 // 设置测试项目状态(字符串+状态)
 pub fn set_step_status(app_handle: AppHandle, test_str: &str, test_status: AppTestStatus) {
-    set_state_to_struct(test_str.clone(), test_status.clone());
+    set_state_to_struct(test_str, test_status.clone());
 
     if let Err(e) = app_handle.clone().emit("test-button-status-update", serde_json::json!({
-        "buttonId": test_str.clone(),
+        "buttonId": test_str,
         "status": test_status.to_string()
     })) {
         log(&format!("测试任务推送等待启动按钮状态失败: {}", e));
@@ -275,5 +302,45 @@ pub fn clean_step1_status(app_handle: AppHandle) {
     set_step_status(app_handle.clone(), "uart", AppTestStatus::UnTested);
     // step3 测试项目状态
     set_step_status(app_handle.clone(), "auto_start", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "print_error_msg", AppTestStatus::Hidden);
+    // 重置error_msg
+    clear_error_msg();
 }
 
+pub fn all_step_status_is_success() -> bool {
+    if let Some(state_arc) = CURRENT_TEST_STATE.get() {
+        if let Ok(state) = state_arc.lock() {
+            return state.wait_connection == AppTestStatus::Success &&
+                   state.wait_boot == AppTestStatus::Success &&
+                   state.get_ip == AppTestStatus::Success &&
+                   state.download_test == AppTestStatus::Success &&
+                   state.detect_hardware == AppTestStatus::Success &&
+                   state.emmc_test == AppTestStatus::Success &&
+                   state.dtb == AppTestStatus::Success &&
+                   state.uboot == AppTestStatus::Success &&
+                   state.kernel == AppTestStatus::Success &&
+                   state.app_install == AppTestStatus::Success &&
+                   state.hdmi_wait_connection == AppTestStatus::Success &&
+                   state.hdmi_io_test == AppTestStatus::Success &&
+                   state.hdmi_loop_test == AppTestStatus::Success &&
+                   state.hdmi_capture_test == AppTestStatus::Success &&
+                   state.hdmi_version == AppTestStatus::Success &&
+                   state.hdmi_write_edid == AppTestStatus::Success &&
+                   state.usb_wait_connection == AppTestStatus::Success &&
+                   state.eth_wait_connection == AppTestStatus::Success &&
+                   state.eth_upload_test == AppTestStatus::Success &&
+                   state.eth_download_test == AppTestStatus::Success &&
+                   (state.wifi_wait_connection == AppTestStatus::Success || state.wifi_wait_connection == AppTestStatus::Hidden) &&
+                   (state.wifi_upload_test == AppTestStatus::Success || state.wifi_upload_test == AppTestStatus::Hidden) &&
+                   (state.wifi_download_test == AppTestStatus::Success || state.wifi_download_test == AppTestStatus::Hidden) &&
+                   state.screen == AppTestStatus::Success &&
+                   (state.touch == AppTestStatus::Success || state.touch == AppTestStatus::Hidden) &&
+                   (state.knob == AppTestStatus::Success || state.knob == AppTestStatus::Hidden) &&
+                   state.atx == AppTestStatus::Success &&
+                   state.io == AppTestStatus::Success &&
+                   state.tf_card == AppTestStatus::Success &&
+                   (state.uart == AppTestStatus::Success || state.uart == AppTestStatus::Hidden);
+        }
+    }
+    false
+}

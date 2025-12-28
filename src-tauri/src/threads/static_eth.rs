@@ -1,11 +1,8 @@
 use ipconfig;
 use std::process::Command;
 
-use std::thread;
-use std::time::Duration;
-
 // 静态IP使能
-pub const STATIC_IP_ENABLE: bool = false;
+pub const STATIC_IP_ENABLE: bool = true;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = false;

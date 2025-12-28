@@ -16,7 +16,7 @@ use std::thread;
 use std::time::Duration;
 
 // 打印使能
-pub const PRINTER_ENABLE: bool = false;
+pub const PRINTER_ENABLE: bool = true;
 
 // 打印机配置常量
 pub const TARGET_PRINTER: &str = "CHITENG-CT221B"; // 修改为指定的打印机名称
@@ -440,7 +440,7 @@ pub fn generate_image_with_params(serial: &str, name: &str, exist_wifi: bool) ->
 }
 
 // 参数化不良贴纸图像生成函数
-fn generate_defects_image_with_params(text: &str) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+pub fn generate_defects_image_with_params(text: &str) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let width_px = mm_to_pixels(WIDTH_MM) as u32;
     let height_px = mm_to_pixels(HEIGHT_MM) as u32;
     let zero_x = 10u32;

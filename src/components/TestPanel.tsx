@@ -40,6 +40,7 @@ interface TestButtonStates {
   tf_card: TestButtonStatus;
   uart: TestButtonStatus;
   auto_start: TestButtonStatus;
+  print_error_msg: TestButtonStatus;
 }
 
 export function TestPanel({ isDark }: TestPanelProps) {
@@ -76,6 +77,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
     tf_card: 'untested',
     uart: 'untested',
     auto_start: 'untested',
+    print_error_msg: 'hidden',
   });
 
   // 监听测试按钮状态更新事件
@@ -207,6 +209,7 @@ export function TestPanel({ isDark }: TestPanelProps) {
         <h2 className={`mb-4 ${isDark ? 'text-white' : 'text-neutral-900'}`} style={{ fontSize: '24px', fontWeight: 'bold' }}>应用设置</h2>
         <div className="flex gap-3">
           <TestButton status={buttonStates.auto_start} isDark={isDark}>开机自启</TestButton>
+          <TestButton status={buttonStates.print_error_msg} isDark={isDark}>打印错误</TestButton>
         </div>
       </section>
     </main>

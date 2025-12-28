@@ -36,10 +36,10 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         log("初始化线程已启动");
         let mut ap_ssid = String::new();
         let mut ap_password = String::new();
-        // let static_ip = "172.168.100.1";
-        // let target_ip = "172.168.100.2";
-        let static_ip = "192.168.1.7";
-        let target_ip = "192.168.1.15";
+        let static_ip = "172.168.100.1";
+        let target_ip = "172.168.100.2";
+        // let static_ip = "192.168.1.7";
+        // let target_ip = "192.168.1.15";
         
         // 初始化AppDate
         let app_name = "NanoKVM-Testing";
@@ -125,14 +125,14 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
         // 推送待上传数量到前端
         set_upload_count(app_handle.clone(), 23);
 
-        let serial = "Neal0015B";
+        // let serial = "Neal0015B";
     
-        // 设置设备信息
-        println!("\n📝 设置设备信息:");
-        let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
-        let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
-        let _ = set_test_status(serial, "hardware", "Desk-F");
-        let _ = set_test_status(serial, "wifi_exist", "true");
+        // // 设置设备信息
+        // println!("\n📝 设置设备信息:");
+        // let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
+        // let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
+        // let _ = set_test_status(serial, "hardware", "Desk-F");
+        // let _ = set_test_status(serial, "wifi_exist", "true");
 
         // 循环检测USB工具、打印机、摄像头是否连接
         loop{
