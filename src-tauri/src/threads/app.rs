@@ -9,7 +9,7 @@ use crate::threads::update_state::{AppStepStatus, AppTestStatus,
     set_step_status, clean_step1_status, set_target_ip, set_current_hardware, 
     set_target_serial, all_step_status_is_success, add_error_msg, get_error_msg};
 use crate::threads::server::spawn_file_server_task;
-use crate::threads::ssh::ssh_execute_command;
+use crate::threads::ssh::{ssh_execute_command, ssh_execute_command_check_success};
 use crate::threads::save::{get_config_str, create_serial_number, set_test_status};
 use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, generate_defects_image_with_params, PRINTER_ENABLE, TARGET_PRINTER};
 use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
@@ -20,6 +20,8 @@ use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing,
 use crate::threads::static_eth::STATIC_IP_ENABLE;
 
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
+const GET_IP_MAX_RETRY_COUNT: u64 = 10;
+const DOWNLOAD_MAX_RETRY_COUNT: u64 = 5;
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
@@ -51,6 +53,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
         let mut target_hardware_type = HardwareType::Desk;
         let mut soc_id = String::new();
         let mut auto_type = true;
+        let mut get_ip_retry_count = 0;
+        let mut download_retry_count = 0;
         let file_server_handle = spawn_file_server_task();     // 启动文件服务器任务
         loop {
             // 每轮一定要检测的内容：
@@ -98,12 +102,37 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     if not_connected_kvm_count >= NOT_CONNECTED_KVM_COUNT_THRESHOLD {
                         // 未连接KVM超过10次，同步弹窗提示
                         set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Failed);
-                        let _ = show_dialog_and_wait(app_handle.clone(), "⚠️ 未检测到KVM，请检查KVM是否连接至测试工具".to_string(), vec![
-                            serde_json::json!({ "text": "再次检测" })
+                        let response = show_dialog_and_wait(app_handle.clone(), "⚠️ 未检测到KVM，请检查KVM是否连接至测试工具".to_string(), vec![
+                            serde_json::json!({ "text": "再次检测" }),
+                            serde_json::json!({ "text": "确认连接无误，直接打印不良" })
                         ]);
-                        log("已点击再次检测，需要等待弹窗消失后退出");
+                        if response == "确认连接无误，直接打印不良" {
+                        log("用户选择了直接打印不良");
+                        // 生成错误图片
+                        add_error_msg("连接检测失败，可能是USB-C串口焊接不良/24P排线连接不良/eMMC固件错误 | ");
+
+                        let error_msg = get_error_msg();
+                        if !error_msg.is_empty() {
+                            log(&format!("测试过程中出现错误: {}", error_msg));
+                            // 生成错误图片
+                            let img = generate_defects_image_with_params(&error_msg);
+                            if PRINTER_ENABLE {
+                                if let Err(e) = print_image(&img, Some(TARGET_PRINTER)) {
+                                    log(&format!("打印图像失败: {}", e));
+                                    // #
+                                }
+                            }
+                        }
+                        // 等待弹窗消失500ms
                         std::thread::sleep(Duration::from_millis(500));
-                        not_connected_kvm_count = 0;
+                        app_step1_status = AppStepStatus::Finished;  // 跳转到结束
+                        break;
+                        } else {
+                            log("用户选择了重新检测连接");
+                            not_connected_kvm_count = 0;
+                            // 等待弹窗消失500ms
+                            std::thread::sleep(Duration::from_millis(500));
+                        }
                     }
 
                     log("已连接工具, 未连接KVM, 检测数据密度");
@@ -235,6 +264,43 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                             // ##
                         };
                         while ! execute_command_and_wait(&format!("ping -c 1 {}\n", current_static_ip), "1 received", 1000).await {
+                            get_ip_retry_count += 1;
+                            if get_ip_retry_count >= GET_IP_MAX_RETRY_COUNT {
+                                log("获取IP超时");
+                                set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Failed);
+                                // 弹窗选择打印不良/再次检测
+                                let response = show_dialog_and_wait(app_handle.clone(), "获取IP失败，是否再检测一遍".to_string(), vec![
+                                    serde_json::json!({ "text": "再次检测" }),
+                                    serde_json::json!({ "text": "否，直接打印不良" })
+                                ]);
+                                if response == "否，直接打印不良" {
+                                    log("用户选择了直接打印不良");
+                                    // 生成错误图片
+                                    add_error_msg("以太网连接异常，请检查网线连接或PHY部分焊接 | ");
+
+                                    let error_msg = get_error_msg();
+                                    if !error_msg.is_empty() {
+                                        log(&format!("测试过程中出现错误: {}", error_msg));
+                                        // 生成错误图片
+                                        let img = generate_defects_image_with_params(&error_msg);
+                                        if PRINTER_ENABLE {
+                                            if let Err(e) = print_image(&img, Some(TARGET_PRINTER)) {
+                                                log(&format!("打印图像失败: {}", e));
+                                                // #
+                                            }
+                                        }
+                                    }
+                                    // 等待弹窗消失500ms
+                                    std::thread::sleep(Duration::from_millis(500));
+                                    app_step1_status = AppStepStatus::Finished;  // 跳转到结束
+                                    break;
+                                } else {
+                                    log("用户选择了YES，重新检测以太网");
+                                    get_ip_retry_count = 0;
+                                    // 等待弹窗消失500ms
+                                    std::thread::sleep(Duration::from_millis(500));
+                                }
+                            }
                             set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Repairing);
                             log("需要发送CTRL C确保退出ping");
                             if ! execute_command_and_wait("\x03", ":~#", 1000).await {
@@ -263,14 +329,17 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     }
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
                     set_target_ip(app_handle.clone(), &current_target_ip);
+                    if app_step1_status == AppStepStatus::Finished {
+                        continue;
+                    }
                     app_step1_status = AppStepStatus::DownloadFile;  // 下载文件中
                 }
                 AppStepStatus::DownloadFile => {  // 下载文件中
                     log("下载文件中");
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Testing);
 
-                    if ! execute_command_and_wait("ls /root/test.tar\n", "cannot", 500).await {
-                        let _ = execute_command_and_wait(" ", ":~#", 500).await;
+                    let (ls_success, _) = ssh_execute_command_check_success("ls /root/test.tar", "test.tar").await.unwrap_or((false, String::new()));
+                    if ls_success {
                         // 找到了文件,弹窗是否重新下载
                         let response = show_dialog_and_wait(app_handle.clone(), "待测KVM中已存在产测文件，是否使用最新文件测试".to_string(), vec![
                             serde_json::json!({ "text": "YES" }),
@@ -284,34 +353,39 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                         } else {
                             log("用户选择了重新下载");
                         }
-                    } else {
-                        let _ = execute_command_and_wait(" ", ":~#", 500).await;
                     }
-                    
-                    log("删除旧文件");
-                    let _ = execute_command_and_wait("rm -rf /root/NanoKVM_Pro_Testing*\n", ":~#", 2000).await;
-                    
-                    while execute_command_and_wait("ls /root/test.tar\n", "cannot", 500).await {
-                        let _ = execute_command_and_wait(" ", ":~#", 500).await;
-                        log("开始下载");
-                        std::thread::sleep(Duration::from_secs(1));
-                        // 检测文件是否存在：curl "http://172.168.100.2:8080/download" --output ./test.tar -s -o /dev/null -w "speed: %{speed_download} B/s\n"
-                        if STATIC_IP_ENABLE {
-                            let _ = execute_command_and_wait("curl \"http://172.168.100.1:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
-                            // let _ = execute_command_and_wait(&format!("curl \"http://{}:8080/download\" --output /root/test.tar -s -o /dev/null \n", current_target_ip), ":~#", 2000).await;
-                        } else {
-                            let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
-                        }
-                    }
-                    
-                    // let _ = execute_command_and_wait("curl \"http://192.168.1.7:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
-                    // let _ = execute_command_and_wait("curl \"http://192.168.2.201:8080/download\" --output /root/test.tar -s -o /dev/null \n", ":~#", 2000).await;
-                    
-                    log("找到文件,正在解压");
-                    let _ = execute_command_and_wait("tar -xf /root/test.tar -C /root/\n", ":~#", 2000).await;
 
-                    log("设置文件权限");
-                    let _ = execute_command_and_wait("chmod -R +x /root/NanoKVM_Pro_Testing\n", ":~#", 5000).await;
+                    let _ = ssh_execute_command("rm -rf /root/NanoKVM_Pro_Testing").await;
+
+                    loop {
+                        download_retry_count += 1;
+                        if download_retry_count > DOWNLOAD_MAX_RETRY_COUNT {
+                            log("下载文件失败");
+                            set_step_status(app_handle.clone(), "download_test", AppTestStatus::Failed);
+                            app_step1_status = AppStepStatus::LoggedIn;  // 跳转到结束
+                            break;
+                        }
+                        
+                        let _ = ssh_execute_command("curl \"http://172.168.100.1:8080/download\" --output /root/test.tar -s -o /dev/null -w \"speed: %{speed_download} B/s\\n\"").await;
+
+                        let (ls_success, _) = ssh_execute_command_check_success("ls /root/test.tar", "test.tar").await.unwrap_or((false, String::new()));
+                        if ls_success {
+                            break;
+                        }
+
+                        // 等待1秒
+                        std::thread::sleep(Duration::from_secs(1));
+                    }
+
+                    if app_step1_status != AppStepStatus::DownloadFile {
+                        continue;
+                    }
+
+                    // 解压
+                    let _ = ssh_execute_command("tar -xf /root/test.tar -C /root/").await;
+
+                    // 设置文件权限
+                    let _ = ssh_execute_command("chmod -R +x /root/NanoKVM_Pro_Testing").await;
                     
                     set_step_status(app_handle.clone(), "download_test", AppTestStatus::Success);
                     app_step1_status = AppStepStatus::CheckingHardware;  // 检查硬件中
@@ -467,12 +541,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                     }
                                     // 等待弹窗消失500ms
                                     std::thread::sleep(Duration::from_millis(500));
-                                    let response = show_dialog_and_wait(app_handle.clone(), "已打印贴纸，请拔出NanoKVM Pro".to_string(), vec![
-                                        serde_json::json!({ "text": "已经拔出" })
-                                    ]);
-                                    // 等待弹窗消失500ms
-                                    std::thread::sleep(Duration::from_millis(500));
-                                    break;
+                                    app_step1_status = AppStepStatus::Finished;  // 跳转到结束
+                                    continue;
                                 } else {
                                     log("用户选择了YES，重新检测eMMC");
                                     continue;

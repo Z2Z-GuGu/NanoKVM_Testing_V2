@@ -4,6 +4,8 @@ cp /root/NanoKVM_Pro_Testing/overlay/boot/* /boot/
 cp /root/NanoKVM_Pro_Testing/overlay/etc/rc.local /etc/
 cp /root/NanoKVM_Pro_Testing/firmware/kvm_spi_ui_test /etc/test-kvm/
 cp /root/NanoKVM_Pro_Testing/firmware/kvm_ui_test /etc/test-kvm/
+cp /root/NanoKVM_Pro_Testing/firmware/kvm_vin_test /etc/test-kvm/
+cp /root/NanoKVM_Pro_Testing/firmware/kvm_ui_setup /usr/bin/kvm_ui_setup
 cp /root/NanoKVM_Pro_Testing/config /etc/test-kvm/
 systemctl enable kvmcomm.service
 systemctl start kvmcomm.service
