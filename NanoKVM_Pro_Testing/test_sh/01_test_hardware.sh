@@ -113,6 +113,8 @@ else
     echo "$output"
 fi
 
+sync
+
 echo "Finish"
 
 

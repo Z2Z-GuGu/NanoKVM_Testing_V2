@@ -106,6 +106,8 @@ case "$1" in
         ;;
 esac
 
+sync
+
 echo "Finish"
 
 

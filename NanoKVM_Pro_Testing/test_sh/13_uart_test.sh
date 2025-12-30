@@ -53,5 +53,7 @@ else
     echo "UART test passed"
 fi
 
+sync
+
 echo "Finish"
 

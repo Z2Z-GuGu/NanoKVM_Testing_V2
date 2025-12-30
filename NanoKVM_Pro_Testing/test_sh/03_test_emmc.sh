@@ -97,6 +97,8 @@ else
     echo "eMMC test failed"
 fi
 
+sync
+
 echo "Finish"
 
 

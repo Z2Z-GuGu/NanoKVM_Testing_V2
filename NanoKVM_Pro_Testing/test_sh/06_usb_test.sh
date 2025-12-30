@@ -31,6 +31,8 @@ else
     echo "USB test passed"
 fi
 
+sync
+
 echo "Finish"
 
 

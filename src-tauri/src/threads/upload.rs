@@ -11,7 +11,7 @@ use crate::threads::update_state::{set_server_state, set_upload_count};
 use crate::threads::save::{get_unuploaded_num, get_one_unuploaded_file_path, rm_from_unuploaded};
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = false;
+const LOG_ENABLE: bool = true;
 
 // 自定义日志函数
 fn log(msg: &str) {

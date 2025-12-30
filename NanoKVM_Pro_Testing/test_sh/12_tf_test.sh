@@ -21,5 +21,7 @@ else
     echo "TF test passed"
 fi
 
+sync
+
 echo "Finish"
 

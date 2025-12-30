@@ -80,5 +80,7 @@ else
     echo "IO test passed"
 fi
 
+sync
+
 echo "Finish"
 
