@@ -2,7 +2,7 @@ use std::thread;
 use tokio::time::sleep;
 use tauri::async_runtime::{spawn};
 use std::time::Duration;
-use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty, set_test_status};
+use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty};
 use crate::threads::serial::{is_usb_tool_connected};
 use crate::threads::printer::is_printer_connected;
 use crate::threads::camera::{get_camera_status, CameraStatus};
@@ -11,7 +11,6 @@ use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
 use tauri::{AppHandle, Emitter};
 use tokio;
 use crate::threads::app::spawn_app_step1_task;
-use crate::threads::update_state::{set_upload_count};
 use crate::threads::wifi_ap::spawn_wifi_ap;
 use crate::threads::static_eth::{set_static_ip_for_testing, STATIC_IP_ENABLE};
 
@@ -122,18 +121,6 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             }
         }
 
-        // 推送待上传数量到前端
-        set_upload_count(app_handle.clone(), 23);
-
-        // let serial = "Neal0015B";
-    
-        // // 设置设备信息
-        // println!("\n📝 设置设备信息:");
-        // let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
-        // let _ = set_test_status(serial, "soc_uid", "6a1760284b50f183");
-        // let _ = set_test_status(serial, "hardware", "Desk-F");
-        // let _ = set_test_status(serial, "wifi_exist", "true");
-
         // 循环检测USB工具、打印机、摄像头是否连接
         loop{
             let mut warning_msg = String::new();
@@ -181,7 +168,5 @@ pub fn spawn_setup_task(app_handle: AppHandle) {
             let app_step_handle = spawn_app_step1_task(app_handle.clone(), ap_ssid.clone(), ap_password.clone(), static_ip.to_string(), target_ip.to_string());
             app_step_handle.await.unwrap();
         }
-
-        log("测试任务线程已启动，退出初始化线程");
     });
 }

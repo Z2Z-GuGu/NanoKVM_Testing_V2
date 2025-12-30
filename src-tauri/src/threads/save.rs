@@ -2,15 +2,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use toml;
-use lazy_static::lazy_static;
-use std::sync::Mutex;
+use std::sync::OnceLock;
 use chrono::Local;
 use chrono::Datelike;
 
-lazy_static! {
-    /// 全局存储应用程序根路径
-    static ref APP_ROOT: Mutex<Option<PathBuf>> = Mutex::new(None);
-}
+/// 全局存储应用程序根路径
+static APP_ROOT: OnceLock<PathBuf> = OnceLock::new();
 
 /// 应用程序配置（[application] 部分）
 #[derive(Deserialize, Debug)]
@@ -113,7 +110,7 @@ pub fn init_appdata(app_name: &str) -> Result<PathBuf, Box<dyn std::error::Error
     println!("应用程序根目录: {}", app_root.display());
     
     // 将应用程序根路径存储到全局变量
-    *APP_ROOT.lock().unwrap() = Some(app_root.clone());
+    let _ = APP_ROOT.set(app_root.clone());
     
     // 3. 创建目录结构
     create_directory_structure(&app_root, app_name)?;
@@ -209,12 +206,12 @@ pub fn cp_to_unuploaded(serial: &str) -> Result<(), Box<dyn std::error::Error>> 
 /// # 返回
 /// - `Ok(())` 如果操作成功
 /// - `Err(错误信息)` 如果操作失败
-pub fn rm_from_unuploaded(serial: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn rm_from_unuploaded(file_name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let root_path = get_app_root()?;
     
     // 构建源文件和目标文件路径
-    let save_path = root_path.join("data").join("save").join(format!("{}.json", serial));
-    let unuploaded_path = root_path.join("data").join("unuploaded").join(format!("{}.json", serial));
+    let save_path = root_path.join("data").join("save").join(format!("{}", file_name));
+    let unuploaded_path = root_path.join("data").join("unuploaded").join(format!("{}", file_name));
     
     // 检查save目录中的文件是否存在
     if !save_path.exists() {
@@ -238,6 +235,55 @@ pub fn rm_from_unuploaded(serial: &str) -> Result<(), Box<dyn std::error::Error>
     }
     
     Ok(())
+}
+
+pub fn get_unuploaded_num() -> u32 {
+    match get_app_root() {
+        Ok(root_path) => {
+            let unuploaded_path = root_path.join("data").join("unuploaded");
+            match fs::read_dir(unuploaded_path) {
+                Ok(entries) => {
+                    entries.filter(|e| {
+                        if let Ok(entry) = e.as_ref() {
+                            if let Ok(file_type) = entry.file_type() {
+                                return file_type.is_file();
+                            }
+                        }
+                        false
+                    }).count() as u32
+                },
+                Err(_) => 0
+            }
+        },
+        Err(_) => 0
+    }
+}
+
+pub fn get_one_unuploaded_file_path() -> Option<String> {
+    match get_app_root() {
+        Ok(root_path) => {
+            let unuploaded_path = root_path.join("data").join("unuploaded");
+            match fs::read_dir(&unuploaded_path) {
+                Ok(entries) => {
+                    for entry in entries {
+                        if let Ok(entry) = entry {
+                            if let Ok(file_type) = entry.file_type() {
+                                if file_type.is_file() {
+                                    if let Ok(file_name) = entry.file_name().into_string() {
+                                        let file_path = unuploaded_path.join(&file_name);
+                                        return Some(file_path.to_string_lossy().to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None
+                },
+                Err(_) => None
+            }
+        },
+        Err(_) => None
+    }
 }
 
 /// 创建默认配置文件
@@ -297,8 +343,7 @@ wifi_down_speed = 10    # 测试WiFi下载速度，单位Mbps
 /// - `Ok(PathBuf)` 如果应用程序已初始化
 /// - `Err(错误信息)` 如果应用程序未初始化
 fn get_app_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let app_root = APP_ROOT.lock().unwrap();
-    match app_root.as_ref() {
+    match APP_ROOT.get() {
         Some(path) => Ok(path.clone()),
         None => Err("应用程序根路径未初始化，请先调用 init_appdata".into()),
     }
@@ -329,6 +374,7 @@ fn get_relative_path(path: &Path, app_name: &str) -> String {
 /// # 返回
 /// - `Ok(AppConfig)` 如果解析成功
 /// - `Err(错误信息)` 如果解析失败
+#[allow(dead_code)]
 pub fn parse_config(config_path: &Path) -> Result<AppConfig, Box<dyn std::error::Error>> {
     // 读取配置文件内容
     let config_content = fs::read_to_string(config_path)?;
@@ -559,6 +605,7 @@ pub fn get_app_file_path() -> PathBuf {
 /// - `Ok(状态字符串)` 如果获取成功
 /// - `Ok(空字符串)` 如果项目不存在
 /// - `Err(错误信息)` 如果获取失败
+#[allow(dead_code)]
 pub fn get_test_status(serial: &str, item: &str) -> Result<String, Box<dyn std::error::Error>> {
     let root_path = get_app_root()?;
     
@@ -610,6 +657,7 @@ pub fn get_test_status(serial: &str, item: &str) -> Result<String, Box<dyn std::
 /// # 返回
 /// - `Ok(())` 如果设置成功
 /// - `Err(错误信息)` 如果设置失败
+#[allow(dead_code)]
 pub fn set_test_log(serial: &str, date: &str, item: &str, log: &str) -> Result<(), Box<dyn std::error::Error>> {
     let root_path = get_app_root()?;
     

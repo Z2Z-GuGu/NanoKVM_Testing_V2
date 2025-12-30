@@ -1,4 +1,4 @@
-use std::thread;
+// use std::thread;
 use std::sync::{Mutex, mpsc};
 use lazy_static::lazy_static;
 use uuid::Uuid;
@@ -105,46 +105,46 @@ pub fn show_dialog_and_wait(app_handle: AppHandle, message: String, buttons: Vec
     }
 }
 
-pub fn spawn_dialog_test_task(app_handle: AppHandle) {
-    thread::spawn(move || {
-        log("弹窗测试任务线程已启动");
+// pub fn spawn_dialog_test_task(app_handle: AppHandle) {
+//     thread::spawn(move || {
+//         log("弹窗测试任务线程已启动");
         
-        // 延迟3秒后推送测试弹窗，确保前端已经准备好
-        std::thread::sleep(std::time::Duration::from_secs(3));
+//         // 延迟3秒后推送测试弹窗，确保前端已经准备好
+//         std::thread::sleep(std::time::Duration::from_secs(3));
 
-        log("推送测试弹窗...");
+//         log("推送测试弹窗...");
         
-        // 推送测试弹窗信息
-        show_dialog(app_handle.clone(), "这是来自后端的测试弹窗消息\n支持多行文本\n可以显示各种提示信息".to_string(), vec![
-            serde_json::json!({ "text": "确定", "isPrimary": true }),
-            serde_json::json!({ "text": "取消" })
-        ], |result| {
-            log(&format!("用户点击了按钮: {}", result));
-        });
+//         // 推送测试弹窗信息
+//         show_dialog(app_handle.clone(), "这是来自后端的测试弹窗消息\n支持多行文本\n可以显示各种提示信息".to_string(), vec![
+//             serde_json::json!({ "text": "确定", "isPrimary": true }),
+//             serde_json::json!({ "text": "取消" })
+//         ], |result| {
+//             log(&format!("用户点击了按钮: {}", result));
+//         });
         
-        // 延迟5秒后关闭第一个弹窗
-        std::thread::sleep(std::time::Duration::from_secs(5));
+//         // 延迟5秒后关闭第一个弹窗
+//         std::thread::sleep(std::time::Duration::from_secs(5));
         
-        log("关闭第一个测试弹窗...");
-        // 推送关闭弹窗事件
-        if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
-            log(&format!("弹窗测试任务关闭弹窗失败: {}", e));
-        }
+//         log("关闭第一个测试弹窗...");
+//         // 推送关闭弹窗事件
+//         if let Err(e) = app_handle.emit("hide-dialog", serde_json::json!({})) {
+//             log(&format!("弹窗测试任务关闭弹窗失败: {}", e));
+//         }
         
-        // 等待2秒后推送第二个测试弹窗
-        std::thread::sleep(std::time::Duration::from_secs(2));
+//         // 等待2秒后推送第二个测试弹窗
+//         std::thread::sleep(std::time::Duration::from_secs(2));
 
-        log("推送第二个测试弹窗...");
+//         log("推送第二个测试弹窗...");
         
-        // 推送第二个测试弹窗信息
-        show_dialog(app_handle.clone(), "这是另一个测试弹窗，只有一个按钮".to_string(), vec![
-            serde_json::json!({ "text": "OK" })
-        ], |result| {
-            log(&format!("用户点击了按钮: {}", result));
-    });
+//         // 推送第二个测试弹窗信息
+//         show_dialog(app_handle.clone(), "这是另一个测试弹窗，只有一个按钮".to_string(), vec![
+//             serde_json::json!({ "text": "OK" })
+//         ], |result| {
+//             log(&format!("用户点击了按钮: {}", result));
+//     });
     
-    log("弹窗测试任务完成");
-});
+//     log("弹窗测试任务完成");
+// });
 
-log("弹窗测试任务线程创建完成");
-}
+// log("弹窗测试任务线程创建完成");
+// }

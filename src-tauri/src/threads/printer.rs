@@ -12,8 +12,8 @@ use winapi::um::wingdi::{
 };
 use winapi::um::winspool::{EnumPrintersA, PRINTER_ENUM_LOCAL, PRINTER_INFO_1A}; // 添加打印机枚举功能
 
-use std::thread;
-use std::time::Duration;
+// use std::thread;
+// use std::time::Duration;
 
 // 打印使能
 pub const PRINTER_ENABLE: bool = true;
@@ -613,33 +613,33 @@ pub async fn is_printer_connected() -> bool {
     printer_exists(TARGET_PRINTER)
 }
 
-pub fn spawn_printer_task() {
-    thread::spawn(move || {
-        // 测试打印功能
-        log("\n=== 打印测试 ===");
+// pub fn spawn_printer_task() {
+//     thread::spawn(move || {
+//         // 测试打印功能
+//         log("\n=== 打印测试 ===");
     
-        let test_serial = "Neal00150";
-        let test_name = "NanoKVM-ATX-B";
+//         let test_serial = "Neal00150";
+//         let test_name = "NanoKVM-ATX-B";
 
-        let _img0 = generate_defects_image_with_params("不良贴纸不良\n贴纸不良贴纸不良贴纸不良贴纸贴纸不良贴纸不良贴纸贴纸不良贴纸不良贴纸"); // 测试换行符分割
+//         let _img0 = generate_defects_image_with_params("不良贴纸不良\n贴纸不良贴纸不良贴纸不良贴纸贴纸不良贴纸不良贴纸贴纸不良贴纸不良贴纸"); // 测试换行符分割
         
-        if printer_exists(TARGET_PRINTER) {
-            let img = generate_image_with_params(test_serial, test_name, true);
+//         if printer_exists(TARGET_PRINTER) {
+//             let img = generate_image_with_params(test_serial, test_name, true);
             
-            if PRINTER_ENABLE {
-                match print_image(&img, Some(TARGET_PRINTER)) {
-                    Ok(_) => log("✅ 打印测试成功"),
-                    Err(e) => log(&format!("❌ 打印测试失败: {}", e.to_string())),
-                }
-            } else {
-                log(&format!("打印功能已禁用"));
-            }
-        } else {
-            log(&format!("❌ 设备不存在: {}", test_name));
-        }
+//             if PRINTER_ENABLE {
+//                 match print_image(&img, Some(TARGET_PRINTER)) {
+//                     Ok(_) => log("✅ 打印测试成功"),
+//                     Err(e) => log(&format!("❌ 打印测试失败: {}", e.to_string())),
+//                 }
+//             } else {
+//                 log(&format!("打印功能已禁用"));
+//             }
+//         } else {
+//             log(&format!("❌ 设备不存在: {}", test_name));
+//         }
         
-        loop {
-            thread::sleep(Duration::from_secs(1));
-        }
-    });
-}
+//         loop {
+//             thread::sleep(Duration::from_secs(1));
+//         }
+//     });
+// }

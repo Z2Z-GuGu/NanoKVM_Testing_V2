@@ -107,26 +107,26 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                             serde_json::json!({ "text": "确认连接无误，直接打印不良" })
                         ]);
                         if response == "确认连接无误，直接打印不良" {
-                        log("用户选择了直接打印不良");
-                        // 生成错误图片
-                        add_error_msg("连接检测失败，可能是USB-C串口焊接不良/24P排线连接不良/eMMC固件错误 | ");
-
-                        let error_msg = get_error_msg();
-                        if !error_msg.is_empty() {
-                            log(&format!("测试过程中出现错误: {}", error_msg));
+                            log("用户选择了直接打印不良");
                             // 生成错误图片
-                            let img = generate_defects_image_with_params(&error_msg);
-                            if PRINTER_ENABLE {
-                                if let Err(e) = print_image(&img, Some(TARGET_PRINTER)) {
-                                    log(&format!("打印图像失败: {}", e));
-                                    // #
+                            add_error_msg("连接检测失败，可能是USB-C串口焊接不良/24P排线连接不良/eMMC固件错误 | ");
+
+                            let error_msg = get_error_msg();
+                            if !error_msg.is_empty() {
+                                log(&format!("测试过程中出现错误: {}", error_msg));
+                                // 生成错误图片
+                                let img = generate_defects_image_with_params(&error_msg);
+                                if PRINTER_ENABLE {
+                                    if let Err(e) = print_image(&img, Some(TARGET_PRINTER)) {
+                                        log(&format!("打印图像失败: {}", e));
+                                        // #
+                                    }
                                 }
                             }
-                        }
-                        // 等待弹窗消失500ms
-                        std::thread::sleep(Duration::from_millis(500));
-                        app_step1_status = AppStepStatus::Finished;  // 跳转到结束
-                        break;
+                            // 等待弹窗消失500ms
+                            std::thread::sleep(Duration::from_millis(500));
+                            app_step1_status = AppStepStatus::Finished;  // 跳转到结束
+                            continue;
                         } else {
                             log("用户选择了重新检测连接");
                             not_connected_kvm_count = 0;
@@ -544,11 +544,11 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                                     app_step1_status = AppStepStatus::Finished;  // 跳转到结束
                                     continue;
                                 } else {
+                                    // 等待弹窗消失500ms
+                                    std::thread::sleep(Duration::from_millis(500));
                                     log("用户选择了YES，重新检测eMMC");
                                     continue;
                                 }
-                                // 等待弹窗消失500ms
-                                std::thread::sleep(Duration::from_millis(500));
                             }
                         }
                         Err(e) => {

@@ -299,6 +299,7 @@ pub fn serial_management_task() {
 }
 
 // 等待指定串口数据，带超时设置，单位：毫秒
+#[allow(dead_code)]
 pub async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
     let timeout_time = Instant::now() + Duration::from_millis(timeout_ms);
     loop {
@@ -320,15 +321,6 @@ pub async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
 }
 
 // 执行命令并等待完成
-pub async fn execute_command_and_wait_old(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
-    serial_send(command).await;
-    if ! wait_for_serial_data(ret_str.as_bytes(), timeout_ms).await {
-        log(&format!("发送{}超时", command));
-        return false;
-    }
-    return true;
-}
-
 pub async fn execute_command_and_wait(command: &str, ret_str: &str, timeout_ms: u64) -> bool {
     serial_send(command).await;
     let result = detect_serial_string(&[ret_str], timeout_ms, 0).await;

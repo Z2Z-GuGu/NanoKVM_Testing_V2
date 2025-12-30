@@ -5,7 +5,7 @@ use tokio::time::sleep;
 use crate::threads::update_state::{AppTestStatus, set_step_status, all_step_status_is_success, add_error_msg, get_error_msg};
 use crate::threads::ssh::{ssh_execute_command_check_success, ssh_execute_command};
 use crate::threads::camera::{get_camera_status, CameraStatus};
-use crate::threads::save::{get_config_str, set_test_status};
+use crate::threads::save::{get_config_str, set_test_status, cp_to_unuploaded};
 use crate::threads::dialog_test::{show_dialog_and_wait};
 use crate::threads::printer::{generate_defects_image_with_params, print_image, PRINTER_ENABLE, TARGET_PRINTER};
 use crate::threads::hdmi::if_two_monitor;
@@ -564,6 +564,7 @@ pub fn spawn_step3_test_end(app_handle: AppHandle, target_serial: &str) -> JoinH
             }
             set_step_status(app_handle.clone(), "print_error_msg", AppTestStatus::Success);
         }
+        let _ = cp_to_unuploaded(&serial);
         sleep(Duration::from_millis(100)).await;
     })
 }

@@ -34,12 +34,14 @@ pub fn spawn_wifi_ap(ssid: &str, password: &str) -> JoinHandle<()> {
             let helper_result = WlanHostedNetworkHelper::new(&ssid, &password, tx);
             
             match helper_result {
-                Ok(wlan_hosted_network_helper) => {
+                // Ok(wlan_hosted_network_helper) => {
+                Ok(_) => {
                     println!("✓ 热点创建成功！");
                     println!("热点正在运行，按 Ctrl+C 可提前停止\n");
                     
                     // 启动状态监控线程
-                    let status_thread = thread::spawn(move || {
+                    // let status_thread = thread::spawn(move || {
+                    let _ = thread::spawn(move || {
                         while let Ok(message) = rx.recv() {
                             println!("[状态] {}", message);
                             
