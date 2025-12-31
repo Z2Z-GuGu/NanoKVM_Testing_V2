@@ -31,8 +31,11 @@ else
     TEST_SERIAL="NULL"
 fi
 
-BOARD_SERIAL=$(cat /proc/lt6911_info/version | awk -F') ' '{print $2}')
-# // # 实测从Unknown中读出来是什么，以及有如何转换为Unknown
+if BOARD_SERIAL=$(cat /proc/lt6911_info/version 2>/dev/null | awk -F') ' '{print $2}') && [ -n "$BOARD_SERIAL" ]; then
+    : # 保持 BOARD_SERIAL 的值不变
+else
+    BOARD_SERIAL="Unknown"
+fi
 
 if [ "$BOARD_SERIAL" == "Unknown" ]; then
     if [ "$TEST_SERIAL" == "NULL" ]; then
