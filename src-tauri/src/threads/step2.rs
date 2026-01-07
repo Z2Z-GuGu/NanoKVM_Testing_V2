@@ -498,7 +498,7 @@ pub fn spawn_step2_tf_testing(app_handle: AppHandle, target_serial: &str, hardwa
     let serial = target_serial.to_string();
     spawn(async move {
         if hardware_type == HardwareType::Atx {
-            set_step_status(app_handle.clone(), "sdcard", AppTestStatus::Hidden);
+            set_step_status(app_handle.clone(), "tf_card", AppTestStatus::Hidden);
             let _ = set_test_status(&serial, "sdcard", "No hardware");
         } else {
             let (tf_test_result, tf_test_output) = auto_test_with_retry(&app_handle, "tf_card", "/root/NanoKVM_Pro_Testing/test_sh/12_tf_test.sh", "TF test passed", IO_TEST_MAX_RETRY_COUNT).await;

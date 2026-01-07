@@ -338,7 +338,7 @@ pub fn all_step_status_is_success() -> bool {
                    (state.knob == AppTestStatus::Success || state.knob == AppTestStatus::Hidden) &&
                    state.atx == AppTestStatus::Success &&
                    state.io == AppTestStatus::Success &&
-                   state.tf_card == AppTestStatus::Success &&
+                   (state.tf_card == AppTestStatus::Success || state.tf_card == AppTestStatus::Hidden) &&
                    (state.uart == AppTestStatus::Success || state.uart == AppTestStatus::Hidden);
         }
     }
