@@ -12,7 +12,8 @@ use crate::threads::hdmi::if_two_monitor;
 
 const HDMI_IO_TEST_MAX_RETRY_COUNT: u64 = 5;
 const HDMI_VIN_TEST_MAX_RETRY_COUNT: u64 = 5;
-const HDMI_VERSION_TEST_MAX_RETRY_COUNT: u64 = 1;
+const HDMI_LOOP_TEST_MAX_RETRY_COUNT: u64 = 5;
+const HDMI_VERSION_TEST_MAX_RETRY_COUNT: u64 = 5;
 const HDMI_EDID_TEST_MAX_RETRY_COUNT: u64 = 3;
 const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
@@ -182,6 +183,7 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         }
 
         // 测试环出
+        let mut hdmi_loop_test_retry_count = 0;
         set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Testing);
         loop {
             log("hdmi loop out 测试中...");
@@ -198,6 +200,13 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
                     break;
                 }
                 CameraStatus::Connected => {
+                    hdmi_loop_test_retry_count += 1;
+                    if hdmi_loop_test_retry_count >= HDMI_LOOP_TEST_MAX_RETRY_COUNT {
+                        set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Repairing);
+                        // delay 1s
+                        sleep(Duration::from_secs(1)).await;
+                        break;
+                    }
                     log("hdmi loop out 测试失败");
                     set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Failed);
                     add_error_msg("HDMI环出异常 | ");
@@ -227,12 +236,15 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         }
 
         // 写入version
+        let _ = ssh_execute_command(&format!("echo \"{}\" > /etc/test-kvm/serial", target_serial)).await;
         let full_version_str = format!("{}{}", target_type, target_serial);
         let (hdmi_version_test_result, hdmi_version_test_output) = auto_test_with_retry(&app_handle, "hdmi_version", &format!("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh version \"{}\"", full_version_str), "HDMI version write passed", HDMI_VERSION_TEST_MAX_RETRY_COUNT).await;
         if !hdmi_version_test_result {
             log(&format!("hdmi_version_test失败，输出: {}", hdmi_version_test_output));
             add_error_msg("Ver写入异常，建议检查6911 I2C | ");
         }
+        // 等待1秒，确保version写入完成
+        sleep(Duration::from_secs(1)).await;
 
         // 写入EDID
         let (hdmi_write_edid_test_result, hdmi_write_edid_test_output) = auto_test_with_retry(&app_handle, "hdmi_write_edid", "/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh edid", "HDMI EDID write passed", HDMI_EDID_TEST_MAX_RETRY_COUNT).await;
