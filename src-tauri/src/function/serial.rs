@@ -252,7 +252,7 @@ pub fn serial_management_task() {
                             // }
                             match receive_queue_tx.try_send(received_data) {
                                 Ok(_) => {},
-                                Err(crate::threads::serial::mpsc::error::TrySendError::Full(data)) => {
+                                Err(crate::function::serial::mpsc::error::TrySendError::Full(data)) => {
                                     log("队列已满，丢弃最早数据");
                                     _ = serial_receive().await;
                                     // 直接重试发送当前数据

@@ -2,17 +2,17 @@ use std::thread;
 use tokio::time::sleep;
 use tauri::async_runtime::{spawn};
 use std::time::Duration;
-use crate::threads::save::{init_appdata, get_config_str, is_app_folder_empty};
-use crate::threads::serial::{is_usb_tool_connected};
-use crate::threads::printer::is_printer_connected;
-use crate::threads::camera::{get_camera_status, CameraStatus};
-use crate::threads::dialog_test::{show_dialog, show_dialog_and_wait};
+use crate::function::save::{init_appdata, get_config_str, is_app_folder_empty};
+use crate::function::serial::{is_usb_tool_connected};
+use crate::function::printer::is_printer_connected;
+use crate::function::camera::{get_camera_status, CameraStatus};
+use crate::function::dialog_test::{show_dialog, show_dialog_and_wait};
 // use crate::threads::test_task::spawn_test_task;
 use tauri::{AppHandle, Emitter};
 use tokio;
-use crate::threads::app::spawn_app_step1_task;
-use crate::threads::wifi_ap::spawn_wifi_ap;
-use crate::threads::static_eth::{set_static_ip_for_testing, STATIC_IP_ENABLE};
+use crate::test_app::app::spawn_app_step1_task;
+use crate::function::wifi_ap::spawn_wifi_ap;
+use crate::function::static_eth::{set_static_ip_for_testing, STATIC_IP_ENABLE};
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;

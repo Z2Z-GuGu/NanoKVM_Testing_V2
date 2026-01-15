@@ -1,7 +1,8 @@
-mod threads;
+mod function;
+mod test_app;
 
 // 从dialog_test模块导入按钮点击处理命令
-use crate::threads::dialog_test::handle_button_click;
+use crate::function::dialog_test::handle_button_click;
 use std::sync::Arc;
 use tauri::State;
 
@@ -37,10 +38,10 @@ fn select_program(program: String, state: State<Arc<AppState>>, app_handle: taur
             println!("启动产测程序所有线程");
             
             // 启动产测程序需要的所有线程
-            threads::upload::spawn_upload_task(app_handle.clone());
-            threads::setup::spawn_setup_task(app_handle.clone());
-            threads::serial::serial_management_task();
-            threads::camera::spawn_camera_task();
+            function::upload::spawn_upload_task(app_handle.clone());
+            test_app::setup::spawn_setup_task(app_handle.clone());
+            function::serial::serial_management_task();
+            function::camera::spawn_camera_task();
             
             println!("产测程序: 所有线程已启动");
         },
@@ -48,7 +49,7 @@ fn select_program(program: String, state: State<Arc<AppState>>, app_handle: taur
             println!("启动后测程序线程");
             
             // 后测程序只启动串口线程
-            threads::serial::serial_management_task();
+            function::serial::serial_management_task();
             
             println!("后测程序: 串口线程已启动");
         },
@@ -69,7 +70,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![handle_button_click, select_program])
         .setup(move |_app| {
             // 仅初始化全局测试状态，不启动任何线程
-            threads::update_state::init_global_state();
+            function::update_state::init_global_state();
             Ok(())
         })
         .manage(app_state)

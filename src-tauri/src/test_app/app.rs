@@ -1,23 +1,23 @@
 use std::time::Duration;
 use tauri::async_runtime::{spawn, JoinHandle};
 use tauri::{AppHandle};
-use crate::threads::serial::{
+use crate::function::serial::{
     is_usb_tool_connected, get_current_data_density, 
     serial_send, detect_serial_string, execute_command_and_wait};
-use crate::threads::dialog_test::{show_dialog_and_wait};
-use crate::threads::update_state::{AppStepStatus, AppTestStatus, 
+use crate::function::dialog_test::{show_dialog_and_wait};
+use crate::function::update_state::{AppStepStatus, AppTestStatus, 
     set_step_status, clean_step1_status, set_target_ip, set_current_hardware, 
     set_target_serial, all_step_status_is_success, add_error_msg, get_error_msg};
-use crate::threads::server::spawn_file_server_task;
-use crate::threads::ssh::{ssh_execute_command, ssh_execute_command_check_success};
-use crate::threads::save::{get_config_str, create_serial_number, set_test_status};
-use crate::threads::printer::{is_printer_connected, generate_image_with_params, print_image, generate_defects_image_with_params, PRINTER_ENABLE, TARGET_PRINTER};
-use crate::threads::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
+use crate::function::server::spawn_file_server_task;
+use crate::function::ssh::{ssh_execute_command, ssh_execute_command_check_success};
+use crate::function::save::{get_config_str, create_serial_number, set_test_status};
+use crate::function::printer::{is_printer_connected, generate_image_with_params, print_image, generate_defects_image_with_params, PRINTER_ENABLE, TARGET_PRINTER};
+use crate::test_app::step2::{spawn_step2_file_update, spawn_step2_hdmi_testing, 
     spawn_step2_usb_testing, spawn_step2_eth_testing, spawn_step2_wifi_testing, 
     spawn_step2_penal_testing, spawn_step2_ux_testing, spawn_step2_atx_testing,
     spawn_step2_io_testing, spawn_step2_tf_testing, spawn_step2_uart_testing, 
     HardwareType, spawn_step3_test_end, spawn_step2_app_install};
-use crate::threads::static_eth::STATIC_IP_ENABLE;
+use crate::function::static_eth::STATIC_IP_ENABLE;
 
 const NOT_CONNECTED_KVM_COUNT_THRESHOLD: u64 = 10;  // 未连接KVM超过10次，同步弹窗提示,约10s
 const GET_IP_MAX_RETRY_COUNT: u64 = 10;

@@ -7,8 +7,8 @@ use tauri::async_runtime::{spawn};
 use tauri::{AppHandle};
 use std::time::Duration;
 use std::thread;
-use crate::threads::update_state::{set_server_state, set_upload_count};
-use crate::threads::save::{get_unuploaded_num, get_one_unuploaded_file_path, rm_from_unuploaded};
+use crate::function::update_state::{set_server_state, set_upload_count};
+use crate::function::save::{get_unuploaded_num, get_one_unuploaded_file_path, rm_from_unuploaded};
 
 // 日志控制：false=关闭日志，true=开启日志
 const LOG_ENABLE: bool = true;
