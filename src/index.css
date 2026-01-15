@@ -483,6 +483,10 @@
     margin-bottom: calc(var(--spacing) * 16);
   }
 
+  .mb-18 {
+    margin-bottom: calc(var(--spacing) * 18);
+  }
+
   .flex {
     display: flex;
   }
@@ -658,6 +662,10 @@
   .rounded-t-lg {
     border-top-left-radius: var(--radius);
     border-top-right-radius: var(--radius);
+  }
+
+  .rounded-2xl {
+    border-radius: 1rem;
   }
 
   .border-neutral-300 {

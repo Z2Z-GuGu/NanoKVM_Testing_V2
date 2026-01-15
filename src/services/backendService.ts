@@ -110,3 +110,19 @@ export async function setTestButtonStatus(buttonId: TestButtonId, status: TestBu
     throw error;
   }
 }
+
+// 选择测试程序
+export async function selectProgram(program: 'production' | 'post'): Promise<void> {
+  console.log('选择测试程序:', program);
+  console.log('开发环境检测:', isDevEnvironment);
+  
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    console.log('准备调用后端命令: select_program');
+    await invoke('select_program', { program });
+    console.log('后端命令调用成功');
+  } catch (error) {
+    console.error('选择测试程序失败:', error);
+    throw error;
+  }
+}
