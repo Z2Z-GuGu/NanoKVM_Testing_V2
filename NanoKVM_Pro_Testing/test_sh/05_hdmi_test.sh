@@ -239,8 +239,18 @@ case "$1" in
         repair_lt86102
         echo "HDMI LT86102 repaired"
         ;;
+    set_hdmi_test_ok)
+        touch "$SAVE_DIR/.hdmi.done"
+        ;;
+    get_hdmi_test_status)
+        if [ -f "$SAVE_DIR/.hdmi.done" ]; then
+            echo "HDMI test passed"
+        else
+            echo "HDMI test not passed"
+        fi
+        ;;
     *)
-        echo "Usage: $0 <start|io|vin|version|edid|repair_lt6911|repair_lt86102>"
+        echo "Usage: $0 <start|io|vin|version|edid|repair_lt6911|repair_lt86102|set_hdmi_test_ok|get_hdmi_test_status>"
         ;;
 esac
 

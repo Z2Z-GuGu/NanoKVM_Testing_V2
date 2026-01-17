@@ -327,6 +327,8 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                             };
                         }
                     }
+                    // 确保开启ssh服务
+                    let _ = execute_command_and_wait("sudo systemctl start sshd.service", "#", 2000).await;
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
                     set_target_ip(app_handle.clone(), &current_target_ip);
                     if app_step1_status == AppStepStatus::Finished {

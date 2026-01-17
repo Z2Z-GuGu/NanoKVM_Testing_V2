@@ -12,13 +12,13 @@ use crate::function::hdmi::if_two_monitor;
 
 const HDMI_IO_TEST_MAX_RETRY_COUNT: u64 = 5;
 const HDMI_VIN_TEST_MAX_RETRY_COUNT: u64 = 5;
-const HDMI_LOOP_TEST_MAX_RETRY_COUNT: u64 = 5;
+const HDMI_LOOP_TEST_MAX_RETRY_COUNT: u64 = 10;
 const HDMI_VERSION_TEST_MAX_RETRY_COUNT: u64 = 5;
 const HDMI_EDID_TEST_MAX_RETRY_COUNT: u64 = 3;
 const USB_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_DOWNLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
 const ETH_UPLOAD_TEST_MAX_RETRY_COUNT: u64 = 5;
-const WIFI_CONNECT_MAX_RETRY_COUNT: u64 = 5;
+const WIFI_CONNECT_MAX_RETRY_COUNT: u64 = 10;
 const IO_TEST_MAX_RETRY_COUNT: u64 = 5;
 
 // 枚举atx/desk：
@@ -137,6 +137,18 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         let mut lt6911_i2c_io: bool = true;
         let mut lt86102_i2c_io: bool = true;
 
+        // 判断之前有没有测试过：
+        let hdmi_test_state = ssh_execute_command_check_success("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh get_hdmi_test_status", "HDMI test passed").await.map(|(success, _)| success).unwrap_or(false);
+        if hdmi_test_state {
+            set_step_status(app_handle.clone(), "hdmi_wait_connection", AppTestStatus::Success);
+            set_step_status(app_handle.clone(), "hdmi_io_test", AppTestStatus::Success);
+            set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Success);
+            set_step_status(app_handle.clone(), "hdmi_capture_test", AppTestStatus::Success);
+            set_step_status(app_handle.clone(), "hdmi_version", AppTestStatus::Success);
+            set_step_status(app_handle.clone(), "hdmi_write_edid", AppTestStatus::Success);
+            return;
+        }
+
         // 先启动vin_test
         spawn(async {
             log("启动vin_test测试服务");
@@ -184,6 +196,7 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
 
         // 测试环出
         let mut hdmi_loop_test_retry_count = 0;
+        let mut hdmi_loop_test_result = false;
         set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Testing);
         loop {
             log("hdmi loop out 测试中...");
@@ -191,6 +204,7 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
             match camera_status {
                 CameraStatus::HasImage => {
                     log("hdmi loop out 测试成功");
+                    hdmi_loop_test_result = true;
                     set_step_status(app_handle.clone(), "hdmi_loop_test", AppTestStatus::Success);
                     if lt86102_rx_io && lt86102_tx_io && lt86102_i2c_io {
                         let _ = set_test_status(&serial, "lt86102", "Normal");
@@ -255,6 +269,10 @@ pub fn spawn_step2_hdmi_testing(app_handle: AppHandle, target_type: &str, target
         
         // 等待1秒，确保EDID写入完成
         sleep(Duration::from_secs(1)).await;
+
+        if hdmi_io_test_result && hdmi_loop_test_result &&hdmi_capture_test_result && hdmi_version_test_result && hdmi_write_edid_test_result {
+            let _ = ssh_execute_command_check_success("/root/NanoKVM_Pro_Testing/test_sh/05_hdmi_test.sh set_hdmi_test_ok", "Finish").await.map(|(success, _)| success).unwrap_or(false);
+        }
     })
 }
 

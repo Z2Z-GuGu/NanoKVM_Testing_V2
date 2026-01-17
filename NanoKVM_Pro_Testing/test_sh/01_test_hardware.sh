@@ -27,6 +27,10 @@ echo "SOC ID: $soc_id"
 if [ -f /etc/test-kvm/serial ]; then
     # 存储到变量
     TEST_SERIAL=$(cat /etc/test-kvm/serial)
+    # 如果为空还是NULL，就设为NULL
+    if [ -z "$TEST_SERIAL" ]; then
+        TEST_SERIAL="NULL"
+    fi
 else
     TEST_SERIAL="NULL"
 fi

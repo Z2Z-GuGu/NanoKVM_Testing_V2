@@ -103,7 +103,7 @@ export function Sidebar({
             <h1 className={`${isDark ? 'text-white' : 'text-neutral-900'}`} style={{ fontSize: '34px', fontWeight: 'bold', marginLeft: '4px', marginBottom: '16px' }}>NanoKVM-Pro</h1>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <h1 className={`${isDark ? 'text-white' : 'text-neutral-900'}`} style={{ fontSize: '34px', fontWeight: 'bold', lineHeight: '1.2', margin: 0, marginLeft: '4px' }}>产测工具</h1>
-              <p className={'text-sm ' + (isDark ? 'text-neutral-400' : 'text-neutral-700')} style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, verticalAlign: 'baseline', marginRight: '6px' }}>V2.1</p>
+              <p className={'text-sm ' + (isDark ? 'text-neutral-400' : 'text-neutral-700')} style={{ fontSize: '20px', fontWeight: 'bold', margin: 0, verticalAlign: 'baseline', marginRight: '6px' }}>V2.2</p>
             </div>
           </div>
         </div>

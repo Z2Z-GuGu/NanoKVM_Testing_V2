@@ -375,6 +375,22 @@ pub async fn detect_serial_string(patterns: &[&str], timeout_ms: u64, min_densit
     }
 }
 
+// pub async fn ensure_serial_terminal() -> bool {
+//     log("ensure_serial_terminal");
+//     clear_receive_queue().await;
+//     // 确保串口终端可以写入命令：发送一个换行符，等待回复#
+//     if !execute_command_and_wait("\n", "#", 1000).await {
+//         // 如果不行发送CtrlC
+//         clear_receive_queue().await;
+//         if !execute_command_and_wait("\x03", "#", 1000).await {
+//             // 直接返回异常
+//             return false;
+//         }
+//     }
+//     clear_receive_queue().await;
+//     true
+// }
+
 
 // 检测USB工具是否已经连接
 pub async fn is_usb_tool_connected() -> bool {
