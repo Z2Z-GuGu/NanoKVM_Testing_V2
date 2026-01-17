@@ -12,6 +12,8 @@ use std::time::Duration;
 use lazy_static::lazy_static;
 use tokio::sync::Mutex;
 use tokio;
+use crate::APP_EXIT;
+use std::sync::atomic::Ordering;
 
 // 摄像头状态枚举
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,7 +29,7 @@ lazy_static! {
 }
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = false;
+const LOG_ENABLE: bool = true;
 
 // 自定义日志函数
 fn log(msg: &str) {
@@ -72,6 +74,13 @@ pub fn spawn_camera_task() {
         
         // 主循环
         loop {
+            // 检查退出标志
+            if APP_EXIT.load(Ordering::Relaxed) {
+                camera = None;
+                log(&format!("摄像头线程已退出, {:?}", camera.is_none()));
+                break;
+            }
+            
             // 检查摄像头是否连接
             if camera.is_none() {
                 log("等待摄像头连接...");

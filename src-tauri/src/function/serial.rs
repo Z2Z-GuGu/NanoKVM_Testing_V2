@@ -10,6 +10,7 @@ use tokio::time::{sleep, timeout};
 use tauri::async_runtime::spawn;
 use lazy_static::lazy_static;
 use strip_ansi_escapes::strip;
+use crate::APP_EXIT;
 
 
 // 定义PID/VID和波特率
@@ -183,8 +184,15 @@ pub fn serial_management_task() {
         }
 
         log("串口管理线程已启动");
-        
+   // 主循环
         loop {
+            // 检查退出标志
+            if APP_EXIT.load(Ordering::Relaxed) {
+                serial_port = None;
+                log(&format!("串口线程已退出, {:?}", serial_port.is_none()));
+                break;
+            }
+            
             // 如果没有连接就开始尝试连接
             if serial_port.is_none() {
                 log("串口连接错误，尝试连接...");
@@ -303,6 +311,12 @@ pub fn serial_management_task() {
 pub async fn wait_for_serial_data(expected: &[u8], timeout_ms: u64) -> bool {
     let timeout_time = Instant::now() + Duration::from_millis(timeout_ms);
     loop {
+        // 检查退出标志
+        if APP_EXIT.load(Ordering::Relaxed) {
+            log("程序退出，中断wait_for_serial_data循环");
+            return false;
+        }
+        
         let received = serial_receive_clean().await;
         if !received.is_empty() {
             if received.as_bytes().windows(expected.len()).any(|window| window == expected) {
@@ -337,6 +351,12 @@ pub async fn detect_serial_string(patterns: &[&str], timeout_ms: u64, min_densit
     let mut has_data = false;
     
     loop {
+        // 检查退出标志
+        if APP_EXIT.load(Ordering::Relaxed) {
+            log("程序退出，中断detect_serial_string循环");
+            return "UNMATCHED".to_string();
+        }
+        
         // log("判断数据密度");
         if min_density != 0 {
             let density = get_current_data_density().await;

@@ -6,6 +6,13 @@ mod second_app;
 use crate::function::dialog_test::handle_button_click;
 use std::sync::Arc;
 use tauri::State;
+use std::sync::atomic::{AtomicBool, Ordering};
+use lazy_static::lazy_static;
+
+// 全局退出标志
+lazy_static! {
+    pub static ref APP_EXIT: AtomicBool = AtomicBool::new(false);
+}
 
 // 程序类型枚举
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -38,6 +45,9 @@ fn select_program(program: String, state: State<Arc<AppState>>, app_handle: taur
         ProgramType::Production => {
             println!("启动产测程序所有线程");
             
+            // 重置退出标志
+            APP_EXIT.store(false, Ordering::Relaxed);
+            
             // 产测程序线程启动
             function::update_state::init_global_state();
             function::upload::spawn_upload_task(app_handle.clone());
@@ -49,6 +59,9 @@ fn select_program(program: String, state: State<Arc<AppState>>, app_handle: taur
         },
         ProgramType::Post => {
             println!("启动后测程序线程");
+            
+            // 重置退出标志
+            APP_EXIT.store(false, Ordering::Relaxed);
             
             // 后测程序线程启动
             second_app::state::init_global_state();
@@ -74,6 +87,15 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![handle_button_click, select_program])
         .setup(move |_app| {
             Ok(())
+        })
+        .on_window_event(|_window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // 设置退出标志
+                APP_EXIT.store(true, Ordering::Relaxed);
+                
+                // 增加等待时间，确保所有线程有足够时间检测退出标志并执行退出代码
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
         })
         .manage(app_state)
         .run(tauri::generate_context!())
