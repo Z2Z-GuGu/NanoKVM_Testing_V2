@@ -44,7 +44,7 @@ const FILTER_WINDOW_SIZE: usize = 10;                // 滑动滤波器窗口大
 // const DISCONNECT_COUNT_THRESHOLD: u32 = 4; // 检测不到USB工具3次后触发弹窗
 
 // 日志控制：false=关闭日志，true=开启日志
-const LOG_ENABLE: bool = true;
+const LOG_ENABLE: bool = false;
 
 // 自定义日志函数
 fn log(msg: &str) {

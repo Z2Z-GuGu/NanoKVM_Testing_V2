@@ -240,6 +240,9 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                     set_step_status(app_handle.clone(), "wait_connection", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "wait_boot", AppTestStatus::Success);
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Testing);
+                    // 确保开启ssh服务
+                    log("正在开启ssh服务...");
+                    let _ = execute_command_and_wait("sudo systemctl start sshd.service\n", "#", 2000).await;
                     if STATIC_IP_ENABLE {
                         if ! execute_command_and_wait("pkill dhclient\n", ":~#", 1000).await { 
                             log("关闭DHCP超时");
@@ -327,8 +330,6 @@ pub fn spawn_app_step1_task(app_handle: AppHandle, ssid: String, password: Strin
                             };
                         }
                     }
-                    // 确保开启ssh服务
-                    let _ = execute_command_and_wait("sudo systemctl start sshd.service", "#", 2000).await;
                     set_step_status(app_handle.clone(), "get_ip", AppTestStatus::Success);
                     set_target_ip(app_handle.clone(), &current_target_ip);
                     if app_step1_status == AppStepStatus::Finished {
