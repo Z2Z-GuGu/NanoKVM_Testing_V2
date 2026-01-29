@@ -18,9 +18,10 @@ pub enum AppStepStatus {
     BootedLogin         = 5,  // 已连接KVM，已开机（现在出现login）
     CheckingState       = 7,  // 检查状态中，已登录（现在出现:~#）
     CheckingHDMI        = 8,  // 检查HDMI中
-    CheckingTouch       = 9,  // 检查触摸中
-    CheckingKnob        = 10, // 检查旋钮中
-    Finished            = 11, // 完成
+    CheckingWiFi        = 9,  // 检查WiFi中
+    CheckingTouch       = 10, // 检查触摸中
+    CheckingKnob        = 11, // 检查旋钮中
+    Finished            = 12, // 完成
 }
 
 // 测试项目的状态枚举：'untested' | 'testing' | 'repairing' | 'success' | 'failed' | 'hidden';
@@ -39,6 +40,7 @@ pub struct TestState {
     pub wait_power_on: AppTestStatus,
     pub get_status: AppTestStatus,
     pub video_capture: AppTestStatus,
+    pub wifi_exist: AppTestStatus,
     pub touch: AppTestStatus,
     pub knob: AppTestStatus,
     pub print_label: AppTestStatus,
@@ -54,6 +56,7 @@ pub fn init_global_state() {
             wait_power_on: AppTestStatus::UnTested,
             get_status: AppTestStatus::UnTested,
             video_capture: AppTestStatus::UnTested,
+            wifi_exist: AppTestStatus::UnTested,
             touch: AppTestStatus::UnTested,
             knob: AppTestStatus::UnTested,
             print_label: AppTestStatus::UnTested,
@@ -108,6 +111,7 @@ pub fn set_state_to_struct(test_str: &str, test_status: AppTestStatus) {
                 "wait_power_on" => { state.wait_power_on = test_status; }
                 "get_status" => { state.get_status = test_status; }
                 "video_capture" => { state.video_capture = test_status; }
+                "wifi_exist" => { state.wifi_exist = test_status; }
                 "touch" => { state.touch = test_status; }
                 "knob" => { state.knob = test_status; }
                 "print_label" => { state.print_label = test_status; }
@@ -165,6 +169,7 @@ pub fn clean_step1_status(app_handle: AppHandle) {
     set_step_status(app_handle.clone(), "wait_power_on", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "get_status", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "video_capture", AppTestStatus::UnTested);
+    set_step_status(app_handle.clone(), "wifi_exist", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "touch", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "knob", AppTestStatus::UnTested);
     set_step_status(app_handle.clone(), "print_label", AppTestStatus::UnTested);
@@ -180,6 +185,7 @@ pub fn all_step_status_is_success() -> bool {
                    state.wait_power_on == AppTestStatus::Success &&
                    state.get_status == AppTestStatus::Success &&
                    state.video_capture == AppTestStatus::Success &&
+                   (state.wifi_exist == AppTestStatus::Success || state.wifi_exist == AppTestStatus::Hidden) &&
                    state.touch == AppTestStatus::Success &&
                    (state.knob == AppTestStatus::Success || state.knob == AppTestStatus::Hidden)
         }

@@ -12,6 +12,7 @@ interface SecondTestButtonStates {
   wait_power_on: TestButtonStatus;
   get_status: TestButtonStatus;
   video_capture: TestButtonStatus;
+  wifi_exist: TestButtonStatus;
   touch: TestButtonStatus;
   knob: TestButtonStatus;
   print_label: TestButtonStatus;
@@ -24,6 +25,7 @@ export function SecondTestPanel({ isDark }: SecondTestPanelProps) {
     wait_power_on: 'untested',
     get_status: 'untested',
     video_capture: 'untested',
+    wifi_exist: 'untested',
     touch: 'untested',
     knob: 'untested',
     print_label: 'untested',
@@ -77,9 +79,10 @@ export function SecondTestPanel({ isDark }: SecondTestPanelProps) {
         
         <div className="flex flex-wrap gap-3 mb-3">
           <div className="w-24 flex items-center">
-            <span className={isDark ? 'text-white' : 'text-neutral-900'}>HDMI</span>
+            <span className={isDark ? 'text-white' : 'text-neutral-900'}>硬件</span>
           </div>
           <TestButton status={buttonStates.video_capture} isDark={isDark}>HDMI捕获</TestButton>
+          <TestButton status={buttonStates.wifi_exist} isDark={isDark}>WiFi</TestButton>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-3">

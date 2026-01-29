@@ -351,7 +351,7 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) -> JoinHandle<()> {
                             } else {
                                 add_error_msg("HDMI测试异常，请重新拔插HDMI线");
                                 set_step_status(app_handle.clone(), "video_capture", AppTestStatus::Failed);
-                                app_step1_status = AppStepStatus::CheckingTouch;
+                                app_step1_status = AppStepStatus::CheckingWiFi;
                                 break;
                             }
                         } else {
@@ -361,8 +361,26 @@ pub fn spawn_app_step1_task(app_handle: AppHandle) -> JoinHandle<()> {
 
                     if app_step1_status == AppStepStatus::CheckingHDMI {
                         set_step_status(app_handle.clone(), "video_capture", AppTestStatus::Success);
-                        app_step1_status = AppStepStatus::CheckingTouch;
+                        app_step1_status = AppStepStatus::CheckingWiFi;
                     }
+                }
+                AppStepStatus::CheckingWiFi => {  // 检查WiFi
+                    log("检查WiFi");
+
+                    set_step_status(app_handle.clone(), "wifi_exist", AppTestStatus::Testing);
+                    if !execute_command_and_wait("ls /etc/test-kvm/wifi*\n", "wifi_exist", 1000).await {
+                        set_step_status(app_handle.clone(), "wifi_exist", AppTestStatus::Hidden);
+                        app_step1_status = AppStepStatus::CheckingTouch;
+                        continue;
+                    }
+
+                    if wifi_exist {
+                        set_step_status(app_handle.clone(), "wifi_exist", AppTestStatus::Success);
+                    } else {
+                        set_step_status(app_handle.clone(), "wifi_exist", AppTestStatus::Failed);
+                        add_error_msg("WiFi异常，请使用修复卡修复 | ");
+                    }
+                    app_step1_status = AppStepStatus::CheckingTouch;
                 }
                 AppStepStatus::CheckingTouch => {  // 检查触摸/屏幕
                     log("测试触摸/屏幕");
